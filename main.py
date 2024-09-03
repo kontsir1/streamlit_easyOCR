@@ -3,6 +3,7 @@ import streamlit as st  # Web App
 from PIL import Image, ImageOps, ImageEnhance  # Image Processing
 import numpy as np  # Image Processing
 from easyocr import Reader
+import difflib  # For comparing texts
 
 def main():
     # Set up the Streamlit app
@@ -24,11 +25,21 @@ def main():
     # Image upload section
     image = st.file_uploader(label="Upload your image here", type=["png", "jpg", "jpeg"])
 
+    # Input field for the original text
+    original_text = st.text_area("Enter the original text here:", height=200)
+
     if image is not None:
-        process_image(image, language_code, apply_preprocessing)
+        ocr_text = process_image(image, language_code, apply_preprocessing)
+        st.write("**Extracted Text (before comparison):**")
+        st.write(ocr_text)
+
+        if original_text:
+            # Compare OCR text with the original text
+            highlighted_text = compare_texts(ocr_text, original_text)
+            st.write("**Comparison Result:**")
+            st.markdown(highlighted_text, unsafe_allow_html=True)
     else:
         st.write("Please upload an image to proceed.")
-
 
 def map_language_to_code(language: str) -> str:
     """Maps language selection to easyocr language codes."""
@@ -39,8 +50,7 @@ def map_language_to_code(language: str) -> str:
     }
     return language_map.get(language, "en")  # Default to English
 
-
-def process_image(image, language_code: str, apply_preprocessing: bool):
+def process_image(image, language_code: str, apply_preprocessing: bool) -> str:
     """Handles image processing and OCR."""
     try:
         # Open the original image
@@ -63,12 +73,12 @@ def process_image(image, language_code: str, apply_preprocessing: bool):
 
         # Perform OCR on the processed image
         result_text = perform_ocr(processed_image, language_code)
-        st.write("**Extracted Text:**")
-        st.write(result_text)
+        ocr_text = " ".join(result_text)
+        return ocr_text
 
     except Exception as e:
         st.error(f"An error occurred: {e}")
-
+        return ""
 
 def preprocess_image(image: Image.Image) -> Image.Image:
     """Applies preprocessing steps to the image to optimize OCR results."""
@@ -81,7 +91,6 @@ def preprocess_image(image: Image.Image) -> Image.Image:
 
     return enhanced_image
 
-
 @st.cache_resource
 def load_model(language_code: str) -> Reader:
     """Loads the OCR model with the specified language."""
@@ -91,7 +100,6 @@ def load_model(language_code: str) -> Reader:
         st.error(f"Failed to load the OCR model: {e}")
         raise
 
-
 def perform_ocr(image: Image.Image, language_code: str) -> list:
     """Performs OCR on the given image using the specified language."""
     reader = load_model(language_code)
@@ -99,6 +107,25 @@ def perform_ocr(image: Image.Image, language_code: str) -> list:
 
     # Extract and return text from OCR result
     return [text[1] for text in result]
+
+def compare_texts(ocr_text: str, original_text: str) -> str:
+    """Compares OCR text with the original text and highlights differences."""
+    ocr_words = ocr_text.split()
+    original_words = original_text.split()
+
+    # Use difflib to compare words and highlight differences
+    diff = difflib.ndiff(original_words, ocr_words)
+    highlighted_text = []
+
+    for word in diff:
+        if word.startswith(' '):  # no difference
+            highlighted_text.append(f'<span style="color:green">{word[2:]}</span>')
+        elif word.startswith('-'):  # missing in OCR
+            highlighted_text.append(f'<span style="color:red">{word[2:]}</span>')
+        elif word.startswith('+'):  # extra in OCR
+            highlighted_text.append(f'<span style="color:blue">{word[2:]}</span>')
+
+    return ' '.join(highlighted_text)
 
 
 if __name__ == "__main__":
