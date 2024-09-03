@@ -4,7 +4,6 @@ from PIL import Image, ImageOps, ImageEnhance  # Image Processing
 import numpy as np  # Image Processing
 from easyocr import Reader
 
-
 def main():
     # Set up the Streamlit app
     st.title("Easy OCR - Extract Text from Images")
@@ -19,11 +18,14 @@ def main():
     # Map the selection to easyocr language codes
     language_code = map_language_to_code(language)
 
+    # Preprocessing toggle in the sidebar
+    apply_preprocessing = st.sidebar.checkbox("Apply Image Preprocessing", value=True)
+
     # Image upload section
     image = st.file_uploader(label="Upload your image here", type=["png", "jpg", "jpeg"])
 
     if image is not None:
-        process_image(image, language_code)
+        process_image(image, language_code, apply_preprocessing)
     else:
         st.write("Please upload an image to proceed.")
 
@@ -38,16 +40,26 @@ def map_language_to_code(language: str) -> str:
     return language_map.get(language, "en")  # Default to English
 
 
-def process_image(image, language_code: str):
+def process_image(image, language_code: str, apply_preprocessing: bool):
     """Handles image processing and OCR."""
     try:
-        # Open and display the original image
+        # Open the original image
         input_image = Image.open(image)
-        st.image(input_image, caption="Original Image", use_column_width=True)
 
-        # Preprocess the image for better OCR results
-        processed_image = preprocess_image(input_image)
-        st.image(processed_image, caption="Processed Image", use_column_width=True)
+        if apply_preprocessing:
+            # Preprocess the image for better OCR results
+            processed_image = preprocess_image(input_image)
+        else:
+            processed_image = input_image
+
+        # Display images side by side
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.image(input_image, caption="Original Image", use_column_width=True)
+
+        with col2:
+            st.image(processed_image, caption="Processed Image", use_column_width=True)
 
         # Perform OCR on the processed image
         result_text = perform_ocr(processed_image, language_code)
@@ -66,9 +78,6 @@ def preprocess_image(image: Image.Image) -> Image.Image:
     # Enhance the image contrast
     enhancer = ImageEnhance.Contrast(grayscale_image)
     enhanced_image = enhancer.enhance(2.0)
-
-    # Further process the image if needed (e.g., thresholding)
-    # You can add more preprocessing steps here if needed
 
     return enhanced_image
 
