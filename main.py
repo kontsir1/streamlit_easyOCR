@@ -30,7 +30,7 @@ def main():
         sharpen = st.sidebar.checkbox("Sharpen Image", value=True)
         sharpen_factor = st.sidebar.slider("Sharpening Factor", 1.0, 3.0, 1.5)
         denoise = st.sidebar.checkbox("Reduce Noise", value=True)
-        denoise_radius = st.sidebar.slider("Denoise Radius", 1, 9, 3, step=1)
+        denoise_radius = st.sidebar.slider("Denoise Radius", 1, 7, 3, step=2)
 
     # Image upload section
     image = st.file_uploader(label="Upload your image here", type=["png", "jpg", "jpeg"])
