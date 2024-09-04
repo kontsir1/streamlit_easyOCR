@@ -130,7 +130,7 @@ def compare_texts(ocr_text: str, original_text: str) -> str:
         if word.startswith(' '):  # no difference
             highlighted_text.append(f'<span style="background-color:#c4f4a3">{word[2:]}</span>')
         elif word.startswith('-'):  # missing in OCR
-            highlighted_text.append(f'<span style="background-color:#b21807">{word[2:]}</span>')
+            highlighted_text.append(f'<span style="background-color:#e2a9a3">{word[2:]}</span>')
         elif word.startswith('+'):  # extra in OCR
             highlighted_text.append(f'<span style="background-color:#ffff22">{word[2:]}</span>')
 
