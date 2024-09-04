@@ -110,22 +110,19 @@ def perform_ocr(image: Image.Image, language_code: str) -> list:
 
 def compare_texts(ocr_text: str, original_text: str) -> str:
     """Compares OCR text with the original text and highlights differences."""
-    ocr_words = ocr_text.split()
-    original_words = original_text.split()
-
-    # Use difflib to compare words and highlight differences
-    diff = difflib.ndiff(original_words, ocr_words)
+    # Use difflib to compare texts character by character
+    diff = difflib.ndiff(original_text, ocr_text)
     highlighted_text = []
 
-    for word in diff:
-        if word.startswith(' '):  # no difference
-            highlighted_text.append(f'<span style="color:green">{word[2:]}</span>')
-        elif word.startswith('-'):  # missing in OCR
-            highlighted_text.append(f'<span style="color:red">{word[2:]}</span>')
-        elif word.startswith('+'):  # extra in OCR
-            highlighted_text.append(f'<span style="color:blue">{word[2:]}</span>')
+    for char in diff:
+        if char.startswith(' '):  # no difference
+            highlighted_text.append(f'<span style="color:green">{char[2:]}</span>')
+        elif char.startswith('-'):  # missing in OCR
+            highlighted_text.append(f'<span style="color:red">{char[2:]}</span>')
+        elif char.startswith('+'):  # extra in OCR
+            highlighted_text.append(f'<span style="color:blue">{char[2:]}</span>')
 
-    return ' '.join(highlighted_text)
+    return ''.join(highlighted_text)
 
 
 if __name__ == "__main__":
