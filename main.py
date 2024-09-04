@@ -1,9 +1,11 @@
-import easyocr as ocr  # OCR
+iimport easyocr as ocr  # OCR
 import streamlit as st  # Web App
-from PIL import Image, ImageOps, ImageEnhance, ImageFilter  # Image Processing
+from PIL import Image, ImageOps, ImageEnhance  # Image Processing
 import numpy as np  # Image Processing
 import cv2  # OpenCV for image processing
 import difflib  # For comparing texts
+from easyocr import Reader  # Import the Reader class correctly
+
 
 def main():
     # Set up the Streamlit app
