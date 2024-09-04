@@ -30,7 +30,6 @@ def main():
         sharpen = st.sidebar.checkbox("Sharpen Image", value=True)
         sharpen_factor = st.sidebar.slider("Sharpening Factor", 1.0, 3.0, 1.5)
         denoise = st.sidebar.checkbox("Reduce Noise", value=True)
-        # Adjust denoise radius to allow only odd integers
         denoise_radius = st.sidebar.slider("Denoise Radius", 1, 9, 3, step=2)
 
     # Image upload section
@@ -41,14 +40,17 @@ def main():
 
     if image is not None:
         ocr_text = process_image(image, language_code, apply_preprocessing, grayscale, contrast, contrast_factor, sharpen, sharpen_factor, denoise, denoise_radius)
+        
         st.write("**Extracted Text (before comparison):**")
-        st.write(ocr_text)
+        # Display OCR text line by line to preserve paragraph structure
+        for line in ocr_text:
+            st.text(line)
 
         if original_text:
             # Compare OCR text with the original text
             highlighted_text = compare_texts(ocr_text, original_text)
             st.write("**Comparison Result:**")
-            st.markdown(highlighted_text, unsafe_allow_html=True)
+            st.write(highlighted_text)
     else:
         st.write("Please upload an image to proceed.")
 
@@ -63,7 +65,7 @@ def map_language_to_code(language: str) -> str:
     }
     return language_map.get(language, "en")  # Default to English
 
-def process_image(image, language_code: str, apply_preprocessing: bool, grayscale: bool, contrast: bool, contrast_factor: float, sharpen: bool, sharpen_factor: float, denoise: bool, denoise_radius: int) -> str:
+def process_image(image, language_code: str, apply_preprocessing: bool, grayscale: bool, contrast: bool, contrast_factor: float, sharpen: bool, sharpen_factor: float, denoise: bool, denoise_radius: int) -> list:
     """Handles image processing and OCR."""
     try:
         # Open the original image
@@ -86,12 +88,13 @@ def process_image(image, language_code: str, apply_preprocessing: bool, grayscal
 
         # Perform OCR on the processed image
         result_text = perform_ocr(processed_image, language_code)
-        ocr_text = " ".join(result_text)
-        return ocr_text
+        
+        # Return text as a list of lines
+        return result_text
 
     except Exception as e:
         st.error(f"An error occurred: {e}")
-        return ""
+        return []
 
 def preprocess_image(image: Image.Image, grayscale: bool, contrast: bool, contrast_factor: float, sharpen: bool, sharpen_factor: float, denoise: bool, denoise_radius: int) -> Image.Image:
     """Applies preprocessing steps to the image to optimize OCR results."""
@@ -126,27 +129,27 @@ def perform_ocr(image: Image.Image, language_code: str) -> list:
     reader = load_model(language_code)
     result = reader.readtext(np.array(image))
 
-    # Extract and return text from OCR result
+    # Extract and return text from OCR result as a list of lines
     return [text[1] for text in result]
 
-def compare_texts(ocr_text: str, original_text: str) -> str:
+def compare_texts(ocr_text: list, original_text: str) -> str:
     """Compares OCR text with the original text and highlights differences."""
-    ocr_words = ocr_text.split()
-    original_words = original_text.split()
+    ocr_lines = "\n".join(ocr_text).splitlines()
+    original_lines = original_text.splitlines()
 
-    # Use difflib to compare words and highlight differences
-    diff = difflib.ndiff(original_words, ocr_words)
+    # Use difflib to compare lines and highlight differences
+    diff = difflib.ndiff(original_lines, ocr_lines)
     highlighted_text = []
 
-    for word in diff:
-        if word.startswith(' '):  # no difference
-            highlighted_text.append(f'<span style="background-color:lightgreen">{word[2:]}</span>')
-        elif word.startswith('-'):  # missing in OCR
-            highlighted_text.append(f'<span style="background-color:red">{word[2:]}</span>')
-        elif word.startswith('+'):  # extra in OCR
-            highlighted_text.append(f'<span style="background-color:yellow">{word[2:]}</span>')
+    for line in diff:
+        if line.startswith(' '):  # no difference
+            highlighted_text.append(line[2:])
+        elif line.startswith('-'):  # missing in OCR
+            highlighted_text.append(f'-- {line[2:]} --')
+        elif line.startswith('+'):  # extra in OCR
+            highlighted_text.append(f'++ {line[2:]} ++')
 
-    return ' '.join(highlighted_text)
+    return "\n".join(highlighted_text)
 
 if __name__ == "__main__":
     main()
