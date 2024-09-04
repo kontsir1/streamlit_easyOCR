@@ -64,12 +64,15 @@ def process_image(image, language_code: str, apply_preprocessing: bool) -> str:
         else:
             processed_image = input_image
 
-        # Display the original image
-        st.image(input_image, caption="Original Image", use_column_width=True)
+        # Display the images side by side
+        col1, col2 = st.columns(2)
 
-        # Only show processed image if preprocessing is applied
+        with col1:
+            st.image(input_image, caption="Original Image", use_column_width=True)
+
         if apply_preprocessing:
-            st.image(processed_image, caption="Processed Image", use_column_width=True)
+            with col2:
+                st.image(processed_image, caption="Processed Image", use_column_width=True)
 
         # Perform OCR on the processed image
         result_text = perform_ocr(processed_image, language_code)
