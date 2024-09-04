@@ -19,8 +19,18 @@ def main():
     # Map the selection to easyocr language codes
     language_code = map_language_to_code(language)
 
-    # Preprocessing toggle in the sidebar
+    # Preprocessing options in the sidebar
     apply_preprocessing = st.sidebar.checkbox("Apply Image Preprocessing", value=True)
+    
+    if apply_preprocessing:
+        # Preprocessing options
+        grayscale = st.sidebar.checkbox("Convert to Grayscale", value=True)
+        contrast = st.sidebar.checkbox("Enhance Contrast", value=True)
+        contrast_factor = st.sidebar.slider("Contrast Enhancement Factor", 1.0, 3.0, 2.0)
+        sharpen = st.sidebar.checkbox("Sharpen Image", value=True)
+        sharpen_factor = st.sidebar.slider("Sharpening Factor", 1.0, 3.0, 1.5)
+        denoise = st.sidebar.checkbox("Reduce Noise", value=True)
+        denoise_radius = st.sidebar.slider("Denoise Radius", 0.5, 5.0, 1.0)
 
     # Image upload section
     image = st.file_uploader(label="Upload your image here", type=["png", "jpg", "jpeg"])
@@ -29,7 +39,7 @@ def main():
     original_text = st.text_area("Enter the original text here:", height=200)
 
     if image is not None:
-        ocr_text = process_image(image, language_code, apply_preprocessing)
+        ocr_text = process_image(image, language_code, apply_preprocessing, grayscale, contrast, contrast_factor, sharpen, sharpen_factor, denoise, denoise_radius)
         st.write("**Extracted Text (before comparison):**")
         st.write(ocr_text)
 
@@ -52,27 +62,26 @@ def map_language_to_code(language: str) -> str:
     }
     return language_map.get(language, "en")  # Default to English
 
-def process_image(image, language_code: str, apply_preprocessing: bool) -> str:
+def process_image(image, language_code: str, apply_preprocessing: bool, grayscale: bool, contrast: bool, contrast_factor: float, sharpen: bool, sharpen_factor: float, denoise: bool, denoise_radius: float) -> str:
     """Handles image processing and OCR."""
     try:
         # Open the original image
         input_image = Image.open(image)
 
         if apply_preprocessing:
-            # Preprocess the image for better OCR results
-            processed_image = preprocess_image(input_image)
+            # Preprocess the image based on user options
+            processed_image = preprocess_image(input_image, grayscale, contrast, contrast_factor, sharpen, sharpen_factor, denoise, denoise_radius)
         else:
             processed_image = input_image
 
-        # Display the images side by side
+        # Display images side by side
         col1, col2 = st.columns(2)
 
         with col1:
             st.image(input_image, caption="Original Image", use_column_width=True)
 
-        if apply_preprocessing:
-            with col2:
-                st.image(processed_image, caption="Processed Image", use_column_width=True)
+        with col2:
+            st.image(processed_image, caption="Processed Image", use_column_width=True)
 
         # Perform OCR on the processed image
         result_text = perform_ocr(processed_image, language_code)
@@ -83,22 +92,24 @@ def process_image(image, language_code: str, apply_preprocessing: bool) -> str:
         st.error(f"An error occurred: {e}")
         return ""
 
-def preprocess_image(image: Image.Image) -> Image.Image:
-    """Applies multiple preprocessing steps to the image to optimize OCR results."""
-    # Convert image to grayscale
-    grayscale_image = ImageOps.grayscale(image)
-
-    # Enhance the image contrast
-    enhancer = ImageEnhance.Contrast(grayscale_image)
-    enhanced_image = enhancer.enhance(2.0)
-
-    # Apply a slight blur to reduce noise
-    blurred_image = enhanced_image.filter(ImageFilter.MedianFilter(size=3))
-
-    # Apply sharpening filter to make the text more distinct
-    sharpened_image = blurred_image.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
-
-    return sharpened_image
+def preprocess_image(image: Image.Image, grayscale: bool, contrast: bool, contrast_factor: float, sharpen: bool, sharpen_factor: float, denoise: bool, denoise_radius: float) -> Image.Image:
+    """Applies preprocessing steps to the image to optimize OCR results."""
+    
+    if grayscale:
+        image = ImageOps.grayscale(image)
+    
+    if contrast:
+        enhancer = ImageEnhance.Contrast(image)
+        image = enhancer.enhance(contrast_factor)
+    
+    if sharpen:
+        enhancer = ImageEnhance.Sharpness(image)
+        image = enhancer.enhance(sharpen_factor)
+    
+    if denoise:
+        image = image.filter(ImageFilter.MedianFilter(size=int(denoise_radius)))
+    
+    return image
 
 @st.cache_resource
 def load_model(language_code: str) -> Reader:
@@ -128,11 +139,11 @@ def compare_texts(ocr_text: str, original_text: str) -> str:
 
     for word in diff:
         if word.startswith(' '):  # no difference
-            highlighted_text.append(f'<span style="background-color:#c4f4a3">{word[2:]}</span>')
+            highlighted_text.append(f'<span style="background-color:lightgreen">{word[2:]}</span>')
         elif word.startswith('-'):  # missing in OCR
-            highlighted_text.append(f'<span style="background-color:#e2a9a3">{word[2:]}</span>')
+            highlighted_text.append(f'<span style="background-color:red">{word[2:]}</span>')
         elif word.startswith('+'):  # extra in OCR
-            highlighted_text.append(f'<span style="background-color:#ffff22">{word[2:]}</span>')
+            highlighted_text.append(f'<span style="background-color:yellow">{word[2:]}</span>')
 
     return ' '.join(highlighted_text)
 
