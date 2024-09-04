@@ -1,8 +1,8 @@
 import easyocr as ocr  # OCR
 import streamlit as st  # Web App
-from PIL import Image, ImageOps, ImageEnhance  # Image Processing
+from PIL import Image, ImageOps, ImageEnhance, ImageFilter  # Image Processing
 import numpy as np  # Image Processing
-from easyocr import Reader
+import cv2  # OpenCV for image processing
 import difflib  # For comparing texts
 
 def main():
@@ -89,7 +89,18 @@ def preprocess_image(image: Image.Image) -> Image.Image:
     enhancer = ImageEnhance.Contrast(grayscale_image)
     enhanced_image = enhancer.enhance(2.0)
 
-    return enhanced_image
+    # Convert PIL image to OpenCV format
+    open_cv_image = np.array(enhanced_image)
+    open_cv_image = cv2.cvtColor(open_cv_image, cv2.COLOR_RGB2BGR)
+
+    # Apply dilation to emphasize spaces
+    kernel = np.ones((5,5), np.uint8)
+    dilated_image = cv2.dilate(open_cv_image, kernel, iterations=1)
+
+    # Convert back to PIL image
+    processed_image = Image.fromarray(cv2.cvtColor(dilated_image, cv2.COLOR_BGR2RGB))
+
+    return processed_image
 
 @st.cache_resource
 def load_model(language_code: str) -> Reader:
