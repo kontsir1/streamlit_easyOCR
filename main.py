@@ -2,15 +2,13 @@ import easyocr as ocr  # OCR
 import streamlit as st  # Web App
 from PIL import Image, ImageOps, ImageEnhance  # Image Processing
 import numpy as np  # Image Processing
-import cv2  # OpenCV for image processing
+from easyocr import Reader
 import difflib  # For comparing texts
-from easyocr import Reader  # Import the Reader class correctly
-
 
 def main():
     # Set up the Streamlit app
     st.title("Easy OCR - Extract Text from Images")
-    st.markdown("## Optical Character Recognition - Using `easyocr` and `streamlit`")
+    st.markdown("## Optical Character Recognition - Using easyocr and streamlit")
 
     # Language selection in the sidebar
     language = st.sidebar.selectbox(
@@ -91,18 +89,7 @@ def preprocess_image(image: Image.Image) -> Image.Image:
     enhancer = ImageEnhance.Contrast(grayscale_image)
     enhanced_image = enhancer.enhance(2.0)
 
-    # Convert PIL image to OpenCV format
-    open_cv_image = np.array(enhanced_image)
-    open_cv_image = cv2.cvtColor(open_cv_image, cv2.COLOR_RGB2BGR)
-
-    # Apply dilation to emphasize spaces
-    kernel = np.ones((5,5), np.uint8)
-    dilated_image = cv2.dilate(open_cv_image, kernel, iterations=1)
-
-    # Convert back to PIL image
-    processed_image = Image.fromarray(cv2.cvtColor(dilated_image, cv2.COLOR_BGR2RGB))
-
-    return processed_image
+    return enhanced_image
 
 @st.cache_resource
 def load_model(language_code: str) -> Reader:
@@ -123,19 +110,22 @@ def perform_ocr(image: Image.Image, language_code: str) -> list:
 
 def compare_texts(ocr_text: str, original_text: str) -> str:
     """Compares OCR text with the original text and highlights differences."""
-    # Use difflib to compare texts character by character
-    diff = difflib.ndiff(list(original_text), list(ocr_text))
+    ocr_words = ocr_text.split()
+    original_words = original_text.split()
+
+    # Use difflib to compare words and highlight differences
+    diff = difflib.ndiff(original_words, ocr_words)
     highlighted_text = []
 
-    for char in diff:
-        if char.startswith(' '):  # no difference
-            highlighted_text.append(f'<span style="color:green">{char[2:]}</span>')
-        elif char.startswith('-'):  # missing in OCR
-            highlighted_text.append(f'<span style="color:red">{char[2:]}</span>')
-        elif char.startswith('+'):  # extra in OCR
-            highlighted_text.append(f'<span style="color:blue">{char[2:]}</span>')
+    for word in diff:
+        if word.startswith(' '):  # no difference
+            highlighted_text.append(f'<span style="color:green">{word[2:]}</span>')
+        elif word.startswith('-'):  # missing in OCR
+            highlighted_text.append(f'<span style="color:red">{word[2:]}</span>')
+        elif word.startswith('+'):  # extra in OCR
+            highlighted_text.append(f'<span style="color:blue">{word[2:]}</span>')
 
-    return ''.join(highlighted_text)
+    return ' '.join(highlighted_text)
 
 
 if __name__ == "__main__":
