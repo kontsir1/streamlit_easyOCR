@@ -30,7 +30,8 @@ def main():
         sharpen = st.sidebar.checkbox("Sharpen Image", value=True)
         sharpen_factor = st.sidebar.slider("Sharpening Factor", 1.0, 3.0, 1.5)
         denoise = st.sidebar.checkbox("Reduce Noise", value=True)
-        denoise_radius = st.sidebar.slider("Denoise Radius", 0.5, 5.0, 1.0)
+        # Adjust denoise radius to allow only odd integers
+        denoise_radius = st.sidebar.slider("Denoise Radius", 1, 9, 3, step=2)
 
     # Image upload section
     image = st.file_uploader(label="Upload your image here", type=["png", "jpg", "jpeg"])
@@ -62,7 +63,7 @@ def map_language_to_code(language: str) -> str:
     }
     return language_map.get(language, "en")  # Default to English
 
-def process_image(image, language_code: str, apply_preprocessing: bool, grayscale: bool, contrast: bool, contrast_factor: float, sharpen: bool, sharpen_factor: float, denoise: bool, denoise_radius: float) -> str:
+def process_image(image, language_code: str, apply_preprocessing: bool, grayscale: bool, contrast: bool, contrast_factor: float, sharpen: bool, sharpen_factor: float, denoise: bool, denoise_radius: int) -> str:
     """Handles image processing and OCR."""
     try:
         # Open the original image
@@ -92,7 +93,7 @@ def process_image(image, language_code: str, apply_preprocessing: bool, grayscal
         st.error(f"An error occurred: {e}")
         return ""
 
-def preprocess_image(image: Image.Image, grayscale: bool, contrast: bool, contrast_factor: float, sharpen: bool, sharpen_factor: float, denoise: bool, denoise_radius: float) -> Image.Image:
+def preprocess_image(image: Image.Image, grayscale: bool, contrast: bool, contrast_factor: float, sharpen: bool, sharpen_factor: float, denoise: bool, denoise_radius: int) -> Image.Image:
     """Applies preprocessing steps to the image to optimize OCR results."""
     
     if grayscale:
@@ -107,7 +108,7 @@ def preprocess_image(image: Image.Image, grayscale: bool, contrast: bool, contra
         image = enhancer.enhance(sharpen_factor)
     
     if denoise:
-        image = image.filter(ImageFilter.MedianFilter(size=int(denoise_radius)))
+        image = image.filter(ImageFilter.MedianFilter(size=denoise_radius))
     
     return image
 
