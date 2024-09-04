@@ -1,6 +1,6 @@
 import easyocr as ocr  # OCR
 import streamlit as st  # Web App
-from PIL import Image, ImageOps, ImageEnhance  # Image Processing
+from PIL import Image, ImageOps, ImageEnhance, ImageFilter  # Image Processing
 import numpy as np  # Image Processing
 from easyocr import Reader
 import difflib  # For comparing texts
@@ -13,7 +13,7 @@ def main():
     # Language selection in the sidebar
     language = st.sidebar.selectbox(
         "Choose OCR Language",
-        ("English (UK)", "French", "Italian")
+        ("English (UK)", "French", "Italian", "Polish", "German")
     )
 
     # Map the selection to easyocr language codes
@@ -46,7 +46,9 @@ def map_language_to_code(language: str) -> str:
     language_map = {
         "English (UK)": "en",
         "French": "fr",
-        "Italian": "it"
+        "Italian": "it",
+        "Polish": "pl",
+        "German": "de"
     }
     return language_map.get(language, "en")  # Default to English
 
@@ -62,13 +64,11 @@ def process_image(image, language_code: str, apply_preprocessing: bool) -> str:
         else:
             processed_image = input_image
 
-        # Display images side by side
-        col1, col2 = st.columns(2)
+        # Display the original image
+        st.image(input_image, caption="Original Image", use_column_width=True)
 
-        with col1:
-            st.image(input_image, caption="Original Image", use_column_width=True)
-
-        with col2:
+        # Only show processed image if preprocessing is applied
+        if apply_preprocessing:
             st.image(processed_image, caption="Processed Image", use_column_width=True)
 
         # Perform OCR on the processed image
@@ -81,7 +81,7 @@ def process_image(image, language_code: str, apply_preprocessing: bool) -> str:
         return ""
 
 def preprocess_image(image: Image.Image) -> Image.Image:
-    """Applies preprocessing steps to the image to optimize OCR results."""
+    """Applies multiple preprocessing steps to the image to optimize OCR results."""
     # Convert image to grayscale
     grayscale_image = ImageOps.grayscale(image)
 
@@ -89,7 +89,13 @@ def preprocess_image(image: Image.Image) -> Image.Image:
     enhancer = ImageEnhance.Contrast(grayscale_image)
     enhanced_image = enhancer.enhance(2.0)
 
-    return enhanced_image
+    # Apply a slight blur to reduce noise
+    blurred_image = enhanced_image.filter(ImageFilter.MedianFilter(size=3))
+
+    # Apply sharpening filter to make the text more distinct
+    sharpened_image = blurred_image.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
+
+    return sharpened_image
 
 @st.cache_resource
 def load_model(language_code: str) -> Reader:
@@ -119,14 +125,13 @@ def compare_texts(ocr_text: str, original_text: str) -> str:
 
     for word in diff:
         if word.startswith(' '):  # no difference
-            highlighted_text.append(f'<span style="color:green">{word[2:]}</span>')
+            highlighted_text.append(f'<span style="background-color:green">{word[2:]}</span>')
         elif word.startswith('-'):  # missing in OCR
-            highlighted_text.append(f'<span style="color:red">{word[2:]}</span>')
+            highlighted_text.append(f'<span style="background-color:red">{word[2:]}</span>')
         elif word.startswith('+'):  # extra in OCR
-            highlighted_text.append(f'<span style="color:blue">{word[2:]}</span>')
+            highlighted_text.append(f'<span style="background-color:yellow">{word[2:]}</span>')
 
     return ' '.join(highlighted_text)
-
 
 if __name__ == "__main__":
     main()
