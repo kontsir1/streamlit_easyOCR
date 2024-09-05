@@ -65,7 +65,7 @@ def map_language_to_code(language: str) -> str:
     }
     return language_map.get(language, "en")  # Default to English
 
-def process_image(image, language_code: str, apply_preprocessing: bool, grayscale: bool, contrast: bool, contrast_factor: float, sharpen: bool, sharpen_factor: float, denoise: bool, denoise_radius: int) -> list:
+def process_image(image, language_code: str, apply_preprocessing: bool, grayscale: bool = False, contrast: bool = False, contrast_factor: float = 1.0, sharpen: bool = False, sharpen_factor: float = 1.0, denoise: bool = False, denoise_radius: int = 1) -> list:
     """Handles image processing and OCR."""
     try:
         # Open the original image
