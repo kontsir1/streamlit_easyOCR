@@ -148,29 +148,43 @@ def perform_ocr(image: Image.Image, language_code: str) -> list:
 
 
 def compare_texts(ocr_text: list, original_text: str) -> str:
-    """Compares OCR text with the original text and highlights differences."""
+    """Compares OCR text with the original text character by character and highlights differences."""
 
-    # Join OCR text into a single string and split by lines
+    # Join OCR text into a single string
     ocr_text_str = "\n".join(ocr_text)
     
     # Split original text by lines
-    original_text_lines = original_text.splitlines()
+    original_lines = original_text.splitlines()
+    ocr_lines = ocr_text_str.splitlines()
 
-    # Split OCR text into lines
-    ocr_text_lines = ocr_text_str.splitlines()
-
-    # Create a list of differences using difflib
-    diff = difflib.ndiff(original_text_lines, ocr_text_lines)
-
+    # Prepare the final highlighted result
     highlighted_text = []
 
-    for line in diff:
-        if line.startswith(' '):  # Line is the same in both
-            highlighted_text.append(f'<span style="color:black">{line[2:]}</span>')
-        elif line.startswith('-'):  # Line is missing in OCR
-            highlighted_text.append(f'<span style="color:red"><del>{line[2:]}</del></span>')
-        elif line.startswith('+'):  # Line is extra in OCR
-            highlighted_text.append(f'<span style="color:green"><ins>{line[2:]}</ins></span>')
+    # Compare each line from the original text with corresponding lines in the OCR text
+    for orig_line, ocr_line in zip(original_lines, ocr_lines):
+        # Compute differences at character level
+        diff = difflib.ndiff(orig_line, ocr_line)
+        
+        # Construct the highlighted line
+        highlighted_line = []
+        for char in diff:
+            if char.startswith(' '):  # Characters are the same
+                highlighted_line.append(f'<span style="color:black">{char[2:]}</span>')
+            elif char.startswith('-'):  # Character is missing in OCR
+                highlighted_line.append(f'<span style="color:red"><del>{char[2:]}</del></span>')
+            elif char.startswith('+'):  # Character is extra in OCR
+                highlighted_line.append(f'<span style="color:green"><ins>{char[2:]}</ins></span>')
+
+        # Join highlighted characters into a single line
+        highlighted_text.append("".join(highlighted_line))
+
+    # Add remaining OCR lines that don't have corresponding original lines
+    for ocr_line in ocr_lines[len(original_lines):]:
+        highlighted_text.append(f'<span style="color:green"><ins>{ocr_line}</ins></span>')
+
+    # Add remaining original lines that don't have corresponding OCR lines
+    for orig_line in original_lines[len(ocr_lines):]:
+        highlighted_text.append(f'<span style="color:red"><del>{orig_line}</del></span>')
 
     return "<br>".join(highlighted_text)
 
