@@ -149,14 +149,8 @@ def perform_ocr(image: Image.Image, language_code: str) -> list:
 
 def compare_texts(ocr_text: list, original_text: str) -> str:
     """Compares OCR text with the original text and highlights differences."""
-    ocr_lines = "\n".join(ocr_text).splitlines()
+    ocr_lines = ocr_text
     original_lines = original_text.splitlines()
-
-    st.write("OCR Lines:")
-    st.write(ocr_lines)
-
-    st.write("Original Lines:")
-    st.write(original_lines)
 
     # Use difflib to compare lines and highlight differences
     diff = difflib.ndiff(original_lines, ocr_lines)
