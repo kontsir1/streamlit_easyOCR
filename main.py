@@ -53,11 +53,6 @@ def main():
         for line, confidence in ocr_results:
             st.write(f"Text: {line} (Confidence: {confidence * 100:.2f}%)")
 
-        # Add a clipboard button to copy the extracted text
-        st.write("### Extracted Text:")
-        st.text_area("", value=extracted_text, height=200)
-        st.button("Copy to Clipboard", on_click=lambda: st.write(extracted_text))
-
         # Comparison with original text
         if original_text:
             ocr_text = [line for line, _ in ocr_results]
