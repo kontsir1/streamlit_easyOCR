@@ -152,7 +152,7 @@ def perform_ocr(image: Image.Image, language_code: str) -> list:
     return [(text[1], text[2]) for text in results]
 
 
-ddef compare_texts(ocr_text: list, original_text: str) -> str:
+def compare_texts(ocr_text: list, original_text: str) -> str:
     """Compares OCR text with the original text and highlights differences."""
     ocr_lines = "\n".join(ocr_text).splitlines()
     original_lines = original_text.splitlines()
