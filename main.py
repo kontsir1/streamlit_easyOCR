@@ -21,7 +21,12 @@ def main():
 
     # Preprocessing options in the sidebar
     apply_preprocessing = st.sidebar.checkbox("Apply Image Preprocessing", value=True)
-    
+
+    # Initialize preprocessing variables
+    grayscale = contrast = sharpen = denoise = False
+    contrast_factor = sharpen_factor = 1.0
+    denoise_radius = 1
+
     if apply_preprocessing:
         # Preprocessing options
         grayscale = st.sidebar.checkbox("Convert to Grayscale", value=True)
@@ -53,6 +58,7 @@ def main():
             st.write(highlighted_text)
     else:
         st.write("Please upload an image to proceed.")
+
 
 def map_language_to_code(language: str) -> str:
     """Maps language selection to easyocr language codes."""
