@@ -158,13 +158,13 @@ def compare_texts(ocr_text: list, original_text: str) -> str:
 
     for line in diff:
         if line.startswith(' '):  # no difference
-            highlighted_text.append(line[2:])
+            highlighted_text.append(f'<span style="color:black">{line[2:]}</span>')
         elif line.startswith('-'):  # missing in OCR
             highlighted_text.append(f'<span style="color:red">{line[2:]}</span>')
         elif line.startswith('+'):  # extra in OCR
             highlighted_text.append(f'<span style="color:green">{line[2:]}</span>')
 
-    return "\n".join(highlighted_text)
+    return "<br>".join(highlighted_text)
 
 
 
