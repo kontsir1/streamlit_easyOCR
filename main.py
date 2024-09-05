@@ -44,18 +44,20 @@ def main():
     original_text = st.text_area("Enter the original text here:", height=200)
 
     if image is not None:
-        ocr_text = process_image(image, language_code, apply_preprocessing, grayscale, contrast, contrast_factor, sharpen, sharpen_factor, denoise, denoise_radius)
-        
-        st.write("**Extracted Text (before comparison):**")
-        # Display OCR text line by line to preserve paragraph structure
-        for line in ocr_text:
-            st.text(line)
+    ocr_results = process_image(image, language_code, apply_preprocessing, grayscale, contrast, contrast_factor, sharpen, sharpen_factor, denoise, denoise_radius)
+    
+    st.write("**Extracted Text with Confidence Scores:**")
+    # Display OCR text with confidence scores
+    for line, confidence in ocr_results:
+        st.write(f"Text: {line} (Confidence: {confidence * 100:.2f}%)")
 
-        if original_text:
-            # Compare OCR text with the original text
-            highlighted_text = compare_texts(ocr_text, original_text)
-            st.write("**Comparison Result:**")
-            st.write(highlighted_text)
+    if original_text:
+        # Extract text only for comparison
+        ocr_text = [line for line, _ in ocr_results]
+        highlighted_text = compare_texts(ocr_text, original_text)
+        st.write("**Comparison Result:**")
+        st.write(highlighted_text)
+
     else:
         st.write("Please upload an image to proceed.")
 
@@ -131,12 +133,13 @@ def load_model(language_code: str) -> Reader:
         raise
 
 def perform_ocr(image: Image.Image, language_code: str) -> list:
-    """Performs OCR on the given image using the specified language."""
+    """Performs OCR on the given image using the specified language and returns text with confidence scores."""
     reader = load_model(language_code)
-    result = reader.readtext(np.array(image))
+    results = reader.readtext(np.array(image))
 
-    # Extract and return text from OCR result as a list of lines
-    return [text[1] for text in result]
+    # Extract and return text with confidence scores as a list of tuples (text, confidence)
+    return [(text[1], text[2]) for text in results]
+
 
 def compare_texts(ocr_text: list, original_text: str) -> str:
     """Compares OCR text with the original text and highlights differences."""
