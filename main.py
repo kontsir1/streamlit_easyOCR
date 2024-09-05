@@ -152,6 +152,12 @@ def compare_texts(ocr_text: list, original_text: str) -> str:
     ocr_lines = "\n".join(ocr_text).splitlines()
     original_lines = original_text.splitlines()
 
+    st.write("OCR Lines:")
+    st.write(ocr_lines)
+
+    st.write("Original Lines:")
+    st.write(original_lines)
+
     # Use difflib to compare lines and highlight differences
     diff = difflib.ndiff(original_lines, ocr_lines)
     highlighted_text = []
