@@ -147,29 +147,21 @@ def perform_ocr(image: Image.Image, language_code: str) -> list:
     return [(text[1], text[2]) for text in results]
 
 
-def compare_texts(ocr_text: list, original_text: str) -> str:
+def compare_texts(ocr_text: str, original_text: str) -> str:
     """Compares OCR text with the original text and highlights differences."""
-    
-    # Join OCR text into a single string and split by lines
-    ocr_lines = "\n".join(ocr_text).splitlines()
-    
-    # Split original text by lines
-    original_lines = original_text.splitlines()
-
-    # Create a list of differences
-    diff = difflib.ndiff(original_lines, ocr_lines)
-    
+    # Use difflib to compare texts character by character
+    diff = difflib.ndiff(original_text, ocr_text)
     highlighted_text = []
 
-    for line in diff:
-        if line.startswith(' '):  # Line is the same in both
-            highlighted_text.append(f'<span style="color:black">{line[2:]}</span>')
-        elif line.startswith('-'):  # Line is missing in OCR
-            highlighted_text.append(f'<span style="color:red">{line[2:]}</span>')
-        elif line.startswith('+'):  # Line is extra in OCR
-            highlighted_text.append(f'<span style="color:green">{line[2:]}</span>')
+    for char in diff:
+        if char.startswith(' '):  # no difference
+            highlighted_text.append(f'<span style="color:green">{char[2:]}</span>')
+        elif char.startswith('-'):  # missing in OCR
+            highlighted_text.append(f'<span style="color:red">{char[2:]}</span>')
+        elif char.startswith('+'):  # extra in OCR
+            highlighted_text.append(f'<span style="color:blue">{char[2:]}</span>')
 
-    return "<br>".join(highlighted_text)
+    return ''.join(highlighted_text)
 
 
 
