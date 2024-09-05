@@ -44,12 +44,12 @@ def main():
     original_text = st.text_area("Enter the original text here:", height=200)
 
     if image is not None:
-    ocr_results = process_image(image, language_code, apply_preprocessing, grayscale, contrast, contrast_factor, sharpen, sharpen_factor, denoise, denoise_radius)
-    
-    st.write("**Extracted Text with Confidence Scores:**")
-    # Display OCR text with confidence scores
-    for line, confidence in ocr_results:
-        st.write(f"Text: {line} (Confidence: {confidence * 100:.2f}%)")
+        ocr_results = process_image(image, language_code, apply_preprocessing, grayscale, contrast, contrast_factor, sharpen, sharpen_factor, denoise, denoise_radius)
+        
+        st.write("**Extracted Text with Confidence Scores:**")
+        # Display OCR text with confidence scores
+        for line, confidence in ocr_results:
+            st.write(f"Text: {line} (Confidence: {confidence * 100:.2f}%)")
 
     if original_text:
         # Extract text only for comparison
