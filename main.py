@@ -58,9 +58,6 @@ def main():
         st.write("**Comparison Result:**")
         st.write(highlighted_text)
 
-    else:
-        st.write("Please upload an image to proceed.")
-
 
 def map_language_to_code(language: str) -> str:
     """Maps language selection to easyocr language codes."""
