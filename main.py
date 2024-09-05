@@ -4,7 +4,6 @@ from PIL import Image, ImageOps, ImageEnhance, ImageFilter  # Image Processing
 import numpy as np  # Image Processing
 from easyocr import Reader
 import difflib  # For comparing texts
-import io  # For file download
 
 def main():
     # Set up the Streamlit app
@@ -24,7 +23,7 @@ def main():
     apply_preprocessing = st.sidebar.checkbox("Apply Image Preprocessing", value=True)
 
     # Initialize preprocessing variables
-    grayscale = contrast = sharpen = denoise = edge_detection = False
+    grayscale = contrast = sharpen = denoise = False
     contrast_factor = sharpen_factor = 1.0
     denoise_radius = 1
 
@@ -37,36 +36,34 @@ def main():
         sharpen_factor = st.sidebar.slider("Sharpening Factor", 1.0, 3.0, 1.5)
         denoise = st.sidebar.checkbox("Reduce Noise", value=True)
         denoise_radius = st.sidebar.slider("Denoise Radius", 1, 7, 3, step=2)
-        edge_detection = st.sidebar.checkbox("Apply Edge Detection", value=False)
 
-    # Image upload section for batch processing
-    images = st.file_uploader("Upload your images here", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+    # Image upload section for single image processing
+    image = st.file_uploader("Upload your image here", type=["png", "jpg", "jpeg"])
 
     # Input field for the original text
     original_text = st.text_area("Enter the original text here:", height=200)
 
-    if images:
-        for image in images:
-            with st.spinner(f'Processing {image.name}...'):
-                ocr_results = process_image(image, language_code, apply_preprocessing, grayscale, contrast, contrast_factor, sharpen, sharpen_factor, denoise, denoise_radius, edge_detection)
+    if image:
+        with st.spinner(f'Processing {image.name}...'):
+            ocr_results = process_image(image, language_code, apply_preprocessing, grayscale, contrast, contrast_factor, sharpen, sharpen_factor, denoise, denoise_radius)
 
-            st.write(f"**Extracted Text with Confidence Scores from {image.name}:**")
-            for line, confidence in ocr_results:
-                st.write(f"Text: {line} (Confidence: {confidence * 100:.2f}%)")
+        # Display OCR results
+        extracted_text = "\n".join([line for line, _ in ocr_results])
+        st.write(f"**Extracted Text with Confidence Scores from {image.name}:**")
+        for line, confidence in ocr_results:
+            st.write(f"Text: {line} (Confidence: {confidence * 100:.2f}%)")
 
-            if original_text:
-                ocr_text = [line for line, _ in ocr_results]
-                highlighted_text = compare_texts(ocr_text, original_text)
-                st.markdown("**Comparison Result:**")
-                st.markdown(highlighted_text, unsafe_allow_html=True)
+        # Add a clipboard button to copy the extracted text
+        st.write("### Extracted Text:")
+        st.text_area("", value=extracted_text, height=200)
+        st.button("Copy to Clipboard", on_click=lambda: st.write(extracted_text))
 
-        # Option to download the extracted text as a file
-        st.download_button(
-            label="Download Extracted Text",
-            data=download_text(ocr_results),
-            file_name="extracted_text.txt",
-            mime="text/plain"
-        )
+        # Comparison with original text
+        if original_text:
+            ocr_text = [line for line, _ in ocr_results]
+            highlighted_text = compare_texts(ocr_text, original_text)
+            st.markdown("**Comparison Result:**")
+            st.markdown(highlighted_text, unsafe_allow_html=True)
 
 
 def map_language_to_code(language: str) -> str:
@@ -83,7 +80,7 @@ def map_language_to_code(language: str) -> str:
 
 def process_image(image, language_code: str, apply_preprocessing: bool, grayscale: bool = False, contrast: bool = False,
                   contrast_factor: float = 1.0, sharpen: bool = False, sharpen_factor: float = 1.0,
-                  denoise: bool = False, denoise_radius: int = 1, edge_detection: bool = False) -> list:
+                  denoise: bool = False, denoise_radius: int = 1) -> list:
     """Handles image processing and OCR."""
     try:
         # Open the original image
@@ -91,7 +88,7 @@ def process_image(image, language_code: str, apply_preprocessing: bool, grayscal
 
         if apply_preprocessing:
             # Preprocess the image based on user options
-            processed_image = preprocess_image(input_image, grayscale, contrast, contrast_factor, sharpen, sharpen_factor, denoise, denoise_radius, edge_detection)
+            processed_image = preprocess_image(input_image, grayscale, contrast, contrast_factor, sharpen, sharpen_factor, denoise, denoise_radius)
         else:
             processed_image = input_image
 
@@ -116,7 +113,7 @@ def process_image(image, language_code: str, apply_preprocessing: bool, grayscal
 
 
 def preprocess_image(image: Image.Image, grayscale: bool, contrast: bool, contrast_factor: float, sharpen: bool,
-                     sharpen_factor: float, denoise: bool, denoise_radius: int, edge_detection: bool) -> Image.Image:
+                     sharpen_factor: float, denoise: bool, denoise_radius: int) -> Image.Image:
     """Applies preprocessing steps to the image to optimize OCR results."""
 
     if grayscale:
@@ -132,9 +129,6 @@ def preprocess_image(image: Image.Image, grayscale: bool, contrast: bool, contra
 
     if denoise:
         image = image.filter(ImageFilter.MedianFilter(size=denoise_radius))
-
-    if edge_detection:
-        image = image.filter(ImageFilter.FIND_EDGES)
 
     return image
 
@@ -176,15 +170,6 @@ def compare_texts(ocr_text: list, original_text: str) -> str:
             highlighted_text.append(f'<span style="color:green">++ {line[2:]} ++</span>')
 
     return "\n".join(highlighted_text)
-
-
-def download_text(ocr_results: list) -> io.StringIO:
-    """Returns the OCR results as a downloadable text file."""
-    buffer = io.StringIO()
-    for line, confidence in ocr_results:
-        buffer.write(f"Text: {line} (Confidence: {confidence * 100:.2f}%)\n")
-    buffer.seek(0)
-    return buffer
 
 
 if __name__ == "__main__":
