@@ -3,7 +3,7 @@ import streamlit as st  # Web App
 from PIL import Image, ImageOps, ImageEnhance, ImageFilter  # Image Processing
 import numpy as np  # Image Processing
 from easyocr import Reader
-import difflib  # For comparing texts
+from difflib import SequenceMatcher
 
 def main():
     # Set up the Streamlit app
