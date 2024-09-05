@@ -4,7 +4,7 @@ from PIL import Image, ImageOps, ImageEnhance, ImageFilter  # Image Processing
 import numpy as np  # Image Processing
 from easyocr import Reader
 import difflib  # For comparing texts
-import io  # For file download
+from streamlit_cropper import st_cropper  # Cropping tool
 
 def main():
     # Set up the Streamlit app
@@ -24,7 +24,7 @@ def main():
     apply_preprocessing = st.sidebar.checkbox("Apply Image Preprocessing", value=True)
 
     # Initialize preprocessing variables
-    grayscale = contrast = sharpen = denoise = edge_detection = False
+    grayscale = contrast = sharpen = denoise = False
     contrast_factor = sharpen_factor = 1.0
     denoise_radius = 1
 
@@ -37,37 +37,33 @@ def main():
         sharpen_factor = st.sidebar.slider("Sharpening Factor", 1.0, 3.0, 1.5)
         denoise = st.sidebar.checkbox("Reduce Noise", value=True)
         denoise_radius = st.sidebar.slider("Denoise Radius", 1, 7, 3, step=2)
-        edge_detection = st.sidebar.checkbox("Apply Edge Detection", value=False)
 
-    # Image upload section for batch processing
-    images = st.file_uploader("Upload your images here", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+    # Image upload section
+    image = st.file_uploader(label="Upload your image here", type=["png", "jpg", "jpeg"])
 
     # Input field for the original text
     original_text = st.text_area("Enter the original text here:", height=200)
 
-    if images:
-        for image in images:
-            with st.spinner(f'Processing {image.name}...'):
-                ocr_results = process_image(image, language_code, apply_preprocessing, grayscale, contrast, contrast_factor, sharpen, sharpen_factor, denoise, denoise_radius, edge_detection)
+    if image is not None:
+        # Convert uploaded image to PIL format
+        input_image = Image.open(image)
+        
+        # Display the image and allow the user to crop/select an area
+        cropped_image = st_cropper(input_image, realtime_update=True, box_color='#FF0000')
 
-            st.write(f"**Extracted Text with Confidence Scores from {image.name}:**")
-            for line, confidence in ocr_results:
-                st.write(f"Text: {line} (Confidence: {confidence * 100:.2f}%)")
+        ocr_results = process_image(cropped_image, language_code, apply_preprocessing, grayscale, contrast, contrast_factor, sharpen, sharpen_factor, denoise, denoise_radius)
+        
+        st.write("**Extracted Text with Confidence Scores:**")
+        # Display OCR text with confidence scores
+        for line, confidence in ocr_results:
+            st.write(f"Text: {line} (Confidence: {confidence * 100:.2f}%)")
 
-            if original_text:
-                ocr_text = [line for line, _ in ocr_results]
-                highlighted_text = compare_texts(ocr_text, original_text)
-                st.markdown("**Comparison Result:**")
-                st.markdown(highlighted_text, unsafe_allow_html=True)
-
-        # Option to download the extracted text as a file
-        st.download_button(
-            label="Download Extracted Text",
-            data=download_text(ocr_results),
-            file_name="extracted_text.txt",
-            mime="text/plain"
-        )
-
+    if original_text:
+        # Extract text only for comparison
+        ocr_text = [line for line, _ in ocr_results]
+        highlighted_text = compare_texts(ocr_text, original_text)
+        st.write("**Comparison Result:**")
+        st.write(highlighted_text)
 
 def map_language_to_code(language: str) -> str:
     """Maps language selection to easyocr language codes."""
@@ -80,33 +76,27 @@ def map_language_to_code(language: str) -> str:
     }
     return language_map.get(language, "en")  # Default to English
 
-
-def process_image(image, language_code: str, apply_preprocessing: bool, grayscale: bool = False, contrast: bool = False,
-                  contrast_factor: float = 1.0, sharpen: bool = False, sharpen_factor: float = 1.0,
-                  denoise: bool = False, denoise_radius: int = 1, edge_detection: bool = False) -> list:
+def process_image(image: Image.Image, language_code: str, apply_preprocessing: bool, grayscale: bool = False, contrast: bool = False, contrast_factor: float = 1.0, sharpen: bool = False, sharpen_factor: float = 1.0, denoise: bool = False, denoise_radius: int = 1) -> list:
     """Handles image processing and OCR."""
     try:
-        # Open the original image
-        input_image = Image.open(image)
-
         if apply_preprocessing:
             # Preprocess the image based on user options
-            processed_image = preprocess_image(input_image, grayscale, contrast, contrast_factor, sharpen, sharpen_factor, denoise, denoise_radius, edge_detection)
+            processed_image = preprocess_image(image, grayscale, contrast, contrast_factor, sharpen, sharpen_factor, denoise, denoise_radius)
         else:
-            processed_image = input_image
+            processed_image = image
 
         # Display images side by side
         col1, col2 = st.columns(2)
 
         with col1:
-            st.image(input_image, caption="Original Image", use_column_width=True)
+            st.image(image, caption="Selected Area", use_column_width=True)
 
         with col2:
-            st.image(processed_image, caption="Processed Image", use_column_width=True)
+            st.image(processed_image, caption="Processed Area", use_column_width=True)
 
         # Perform OCR on the processed image
         result_text = perform_ocr(processed_image, language_code)
-
+        
         # Return text as a list of lines
         return result_text
 
@@ -114,30 +104,24 @@ def process_image(image, language_code: str, apply_preprocessing: bool, grayscal
         st.error(f"An error occurred: {e}")
         return []
 
-
-def preprocess_image(image: Image.Image, grayscale: bool, contrast: bool, contrast_factor: float, sharpen: bool,
-                     sharpen_factor: float, denoise: bool, denoise_radius: int, edge_detection: bool) -> Image.Image:
+def preprocess_image(image: Image.Image, grayscale: bool, contrast: bool, contrast_factor: float, sharpen: bool, sharpen_factor: float, denoise: bool, denoise_radius: int) -> Image.Image:
     """Applies preprocessing steps to the image to optimize OCR results."""
-
+    
     if grayscale:
         image = ImageOps.grayscale(image)
-
+    
     if contrast:
         enhancer = ImageEnhance.Contrast(image)
         image = enhancer.enhance(contrast_factor)
-
+    
     if sharpen:
         enhancer = ImageEnhance.Sharpness(image)
         image = enhancer.enhance(sharpen_factor)
-
+    
     if denoise:
         image = image.filter(ImageFilter.MedianFilter(size=denoise_radius))
-
-    if edge_detection:
-        image = image.filter(ImageFilter.FIND_EDGES)
-
+    
     return image
-
 
 @st.cache_resource
 def load_model(language_code: str) -> Reader:
@@ -148,7 +132,6 @@ def load_model(language_code: str) -> Reader:
         st.error(f"Failed to load the OCR model: {e}")
         raise
 
-
 def perform_ocr(image: Image.Image, language_code: str) -> list:
     """Performs OCR on the given image using the specified language and returns text with confidence scores."""
     reader = load_model(language_code)
@@ -156,7 +139,6 @@ def perform_ocr(image: Image.Image, language_code: str) -> list:
 
     # Extract and return text with confidence scores as a list of tuples (text, confidence)
     return [(text[1], text[2]) for text in results]
-
 
 def compare_texts(ocr_text: list, original_text: str) -> str:
     """Compares OCR text with the original text and highlights differences."""
@@ -171,21 +153,11 @@ def compare_texts(ocr_text: list, original_text: str) -> str:
         if line.startswith(' '):  # no difference
             highlighted_text.append(line[2:])
         elif line.startswith('-'):  # missing in OCR
-            highlighted_text.append(f'<span style="color:red">-- {line[2:]} --</span>')
+            highlighted_text.append(f'-- {line[2:]} --')
         elif line.startswith('+'):  # extra in OCR
-            highlighted_text.append(f'<span style="color:green">++ {line[2:]} ++</span>')
+            highlighted_text.append(f'++ {line[2:]} ++')
 
     return "\n".join(highlighted_text)
-
-
-def download_text(ocr_results: list) -> io.StringIO:
-    """Returns the OCR results as a downloadable text file."""
-    buffer = io.StringIO()
-    for line, confidence in ocr_results:
-        buffer.write(f"Text: {line} (Confidence: {confidence * 100:.2f}%)\n")
-    buffer.seek(0)
-    return buffer
-
 
 if __name__ == "__main__":
     main()
