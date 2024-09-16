@@ -5,20 +5,35 @@ import numpy as np  # Image Processing
 from easyocr import Reader
 from difflib import HtmlDiff
 from bs4 import BeautifulSoup  # For HTML parsing and manipulation
+import zipfile
+import io
 
 def main():
     # Set up the Streamlit app
-    st.title("EasyOCR - Extract Text from Images")
-    st.markdown("## Optical Character Recognition - Using EasyOCR and Streamlit")
+    st.title("Enhanced OCR Tool")
+    st.markdown("## Optical Character Recognition with Enhanced Features")
 
-    # Language selection in the sidebar
-    language = st.sidebar.selectbox(
-        "Choose OCR Language",
-        ("English (UK)", "French", "Italian", "Polish", "German")
+    # Language selection in the sidebar (Enhancement 2)
+    available_languages = {
+        "English (UK)": "en",
+        "French": "fr",
+        "Italian": "it",
+        "Polish": "pl",
+        "German": "de",
+        "Spanish": "es",
+        "Chinese (Simplified)": "ch_sim",
+        "Chinese (Traditional)": "ch_tra",
+        "Japanese": "ja",
+        "Korean": "ko",
+        "Russian": "ru",
+        "Arabic": "ar",
+    }
+    language_options = st.sidebar.multiselect(
+        "Choose OCR Language(s)",
+        list(available_languages.keys()),
+        default=["English (UK)"]
     )
-
-    # Map the selection to EasyOCR language codes
-    language_code = map_language_to_code(language)
+    language_codes = [available_languages[lang] for lang in language_options]
 
     # Preprocessing options in the sidebar
     apply_preprocessing = st.sidebar.checkbox("Apply Image Preprocessing", value=True)
@@ -38,45 +53,100 @@ def main():
         denoise = st.sidebar.checkbox("Reduce Noise", value=True)
         denoise_radius = st.sidebar.slider("Denoise Radius", 1, 7, 3, step=2)
 
-    # Image upload section for single image processing
-    image = st.file_uploader("Upload your image here", type=["png", "jpg", "jpeg"])
+    # Adjustable space detection thresholds (Enhancement 5)
+    st.sidebar.markdown("### Space Detection Thresholds")
+    line_threshold = st.sidebar.slider("Line Grouping Threshold", 5, 20, 10)
+    double_space_threshold = st.sidebar.slider("Double Space Threshold", 15, 40, 20)
+    single_space_threshold = st.sidebar.slider("Single Space Threshold", 5, 14, 10)
+
+    # Image upload section for batch processing (Enhancement 3)
+    uploaded_files = st.file_uploader(
+        "Upload your image(s) here", type=["png", "jpg", "jpeg"], accept_multiple_files=True
+    )
 
     # Input field for the original text
     original_text = st.text_area("Enter the original text here:", height=200)
 
-    if image:
-        with st.spinner(f'Processing {image.name}...'):
-            ocr_results = process_image(
-                image,
-                language_code,
-                apply_preprocessing,
-                grayscale,
-                contrast,
-                contrast_factor,
-                sharpen,
-                sharpen_factor,
-                denoise,
-                denoise_radius
-            )
+    if uploaded_files:
+        results = []
+        for image_file in uploaded_files:
+            with st.spinner(f'Processing {image_file.name}...'):
+                ocr_results = process_image(
+                    image_file,
+                    language_codes,
+                    apply_preprocessing,
+                    grayscale,
+                    contrast,
+                    contrast_factor,
+                    sharpen,
+                    sharpen_factor,
+                    denoise,
+                    denoise_radius
+                )
+            if ocr_results:
+                # Reconstruct text preserving spaces
+                reconstructed_lines = reconstruct_text_with_spaces(
+                    ocr_results,
+                    line_threshold,
+                    double_space_threshold,
+                    single_space_threshold
+                )
 
-        if ocr_results:
-            # Reconstruct text preserving spaces
-            reconstructed_lines = reconstruct_text_with_spaces(ocr_results)
+                # Display OCR results
+                st.write(f"**Extracted Text from {image_file.name}:**")
+                extracted_text = '\n'.join(reconstructed_lines)
 
-            # Display OCR results
-            st.write(f"**Extracted Text from {image.name}:**")
-            extracted_text = '\n'.join(reconstructed_lines)
-            st.text_area("OCR Extracted Text:", extracted_text, height=200)
+                # Enhanced UI: Side-by-side comparison (Enhancement 4)
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.text_area("Original Text", original_text, height=200, key=f"original_{image_file.name}")
+                with col2:
+                    st.text_area("OCR Extracted Text", extracted_text, height=200, key=f"ocr_{image_file.name}")
 
-            # Comparison with original text
-            if original_text:
-                # Use the reconstructed lines for comparison
-                diff_html = compare_texts(reconstructed_lines, original_text)
-                st.markdown("**Comparison Result:**")
-                # Render the HTML diff using Streamlit components
-                st.components.v1.html(diff_html, height=600, scrolling=True)
-        else:
-            st.error("No text found in the image. Please try with a different image.")
+                # Comparison with original text
+                if original_text:
+                    # Option to choose diff format (inline or context)
+                    diff_format = st.selectbox("Select Diff Format", ["Context", "Inline"])
+                    if diff_format == "Context":
+                        context = True
+                    else:
+                        context = False
+
+                    diff_html = compare_texts(reconstructed_lines, original_text, context=context)
+                    st.markdown("**Comparison Result:**")
+                    # Render the HTML diff using Streamlit components
+                    st.components.v1.html(diff_html, height=600, scrolling=True)
+
+                # Save results for batch download
+                results.append({
+                    'image_name': image_file.name,
+                    'extracted_text': extracted_text,
+                    'comparison_html': diff_html if original_text else ''
+                })
+            else:
+                st.error(f"No text found in {image_file.name}. Please try with a different image.")
+
+        # Batch download option (Enhancement 3)
+        if results:
+            if st.button("Download Results as ZIP"):
+                zip_buffer = io.BytesIO()
+                with zipfile.ZipFile(zip_buffer, "w") as zf:
+                    for result in results:
+                        # Save extracted text
+                        text_filename = f"{result['image_name']}_extracted.txt"
+                        zf.writestr(text_filename, result['extracted_text'])
+
+                        # Save comparison HTML
+                        if result['comparison_html']:
+                            html_filename = f"{result['image_name']}_comparison.html"
+                            zf.writestr(html_filename, result['comparison_html'])
+
+                st.download_button(
+                    label="Download ZIP",
+                    data=zip_buffer.getvalue(),
+                    file_name="ocr_results.zip",
+                    mime="application/zip"
+                )
 
 def map_language_to_code(language: str) -> str:
     """Maps language selection to EasyOCR language codes."""
@@ -85,11 +155,18 @@ def map_language_to_code(language: str) -> str:
         "French": "fr",
         "Italian": "it",
         "Polish": "pl",
-        "German": "de"
+        "German": "de",
+        "Spanish": "es",
+        "Chinese (Simplified)": "ch_sim",
+        "Chinese (Traditional)": "ch_tra",
+        "Japanese": "ja",
+        "Korean": "ko",
+        "Russian": "ru",
+        "Arabic": "ar",
     }
     return language_map.get(language, "en")  # Default to English
 
-def process_image(image, language_code: str, apply_preprocessing: bool,
+def process_image(image, language_codes: list, apply_preprocessing: bool,
                   grayscale: bool = False, contrast: bool = False,
                   contrast_factor: float = 1.0, sharpen: bool = False,
                   sharpen_factor: float = 1.0, denoise: bool = False,
@@ -114,17 +191,8 @@ def process_image(image, language_code: str, apply_preprocessing: bool,
         else:
             processed_image = input_image
 
-        # Display images side by side
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.image(input_image, caption="Original Image", use_column_width=True)
-
-        with col2:
-            st.image(processed_image, caption="Processed Image", use_column_width=True)
-
         # Perform OCR on the processed image
-        ocr_results = perform_ocr(processed_image, language_code)
+        ocr_results = perform_ocr(processed_image, language_codes)
 
         # Return OCR results
         return ocr_results
@@ -155,22 +223,22 @@ def preprocess_image(image: Image.Image, grayscale: bool, contrast: bool,
     return image
 
 @st.cache_resource
-def load_model(language_code: str) -> Reader:
-    """Loads the OCR model with the specified language."""
+def load_model(language_codes: list) -> Reader:
+    """Loads the OCR model with the specified languages."""
     try:
-        return ocr.Reader([language_code], model_storage_directory=".")
+        return ocr.Reader(language_codes, model_storage_directory=".")
     except Exception as e:
         st.error(f"Failed to load the OCR model: {e}")
         raise
 
-def perform_ocr(image: Image.Image, language_code: str) -> list:
+def perform_ocr(image: Image.Image, language_codes: list) -> list:
     """Performs OCR and returns bounding boxes, text, and confidence scores."""
-    reader = load_model(language_code)
+    reader = load_model(language_codes)
     results = reader.readtext(np.array(image), detail=1, paragraph=False)
     # Each item in results: (bbox, text, confidence)
     return results
 
-def reconstruct_text_with_spaces(ocr_results):
+def reconstruct_text_with_spaces(ocr_results, line_threshold, double_space_threshold, single_space_threshold):
     """Reconstructs text from OCR results, preserving spaces based on bounding box positions."""
     lines = {}
     for result in ocr_results:
@@ -180,7 +248,7 @@ def reconstruct_text_with_spaces(ocr_results):
         # Group words that are on the same line
         line_key = None
         for key in lines.keys():
-            if abs(key - y_center) < 10:  # Adjust the threshold as needed
+            if abs(key - y_center) < line_threshold:
                 line_key = key
                 break
         if line_key is None:
@@ -203,9 +271,9 @@ def reconstruct_text_with_spaces(ocr_results):
                 previous_x_max = max(point[0] for point in previous_bbox)
                 gap = x_min - previous_x_max
                 # Determine the number of spaces based on the gap
-                if gap > 20:  # Adjust the threshold as needed
+                if gap > double_space_threshold:
                     spaces = '  '  # Double space
-                elif gap > 10:
+                elif gap > single_space_threshold:
                     spaces = ' '   # Single space
                 else:
                     spaces = ''
@@ -216,7 +284,7 @@ def reconstruct_text_with_spaces(ocr_results):
         reconstructed_lines.append(line_text)
     return reconstructed_lines
 
-def compare_texts(ocr_text: list, original_text: str) -> str:
+def compare_texts(ocr_text: list, original_text: str, context=True) -> str:
     """Compares OCR text with the original text and returns an HTML diff without any links."""
     from difflib import HtmlDiff
     from bs4 import BeautifulSoup
@@ -230,7 +298,7 @@ def compare_texts(ocr_text: list, original_text: str) -> str:
         ocr_lines,
         fromdesc='Original Text',
         todesc='OCR Text',
-        context=True,
+        context=context,
         numlines=2
     )
 
