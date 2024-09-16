@@ -1,24 +1,15 @@
-import easyocr as ocr  # OCR
 import streamlit as st  # Web App
 from PIL import Image, ImageOps, ImageEnhance, ImageFilter  # Image Processing
 import numpy as np  # Image Processing
-from easyocr import Reader
 from difflib import HtmlDiff
 from bs4 import BeautifulSoup  # For HTML parsing and manipulation
+import pytesseract
+from pytesseract import Output
 
 def main():
     # Set up the Streamlit app
-    st.title("Easy OCR - Extract Text from Images")
-    st.markdown("## Optical Character Recognition - Using easyocr and streamlit")
-
-    # Language selection in the sidebar
-    language = st.sidebar.selectbox(
-        "Choose OCR Language",
-        ("English (UK)", "French", "Italian", "Polish", "German")
-    )
-
-    # Map the selection to easyocr language codes
-    language_code = map_language_to_code(language)
+    st.title("Tesseract OCR - Extract Text from Images")
+    st.markdown("## Optical Character Recognition - Using Tesseract and Streamlit")
 
     # Preprocessing options in the sidebar
     apply_preprocessing = st.sidebar.checkbox("Apply Image Preprocessing", value=True)
@@ -39,16 +30,15 @@ def main():
         denoise_radius = st.sidebar.slider("Denoise Radius", 1, 7, 3, step=2)
 
     # Image upload section for single image processing
-    image = st.file_uploader("Upload your image here", type=["png", "jpg", "jpeg"])
+    image_file = st.file_uploader("Upload your image here", type=["png", "jpg", "jpeg"])
 
     # Input field for the original text
     original_text = st.text_area("Enter the original text here:", height=200)
 
-    if image:
-        with st.spinner(f'Processing {image.name}...'):
-            ocr_results = process_image(
-                image,
-                language_code,
+    if image_file:
+        with st.spinner(f'Processing {image_file.name}...'):
+            ocr_data = process_image(
+                image_file,
                 apply_preprocessing,
                 grayscale,
                 contrast,
@@ -60,41 +50,28 @@ def main():
             )
 
         # Reconstruct text preserving spaces
-        reconstructed_lines = reconstruct_text_with_spaces(ocr_results)
+        reconstructed_text = reconstruct_text_with_spaces(ocr_data)
 
         # Display OCR results
-        st.write(f"**Extracted Text from {image.name}:**")
-        extracted_text = '\n'.join(reconstructed_lines)
-        st.text_area("OCR Extracted Text:", extracted_text, height=200)
+        st.write(f"**Extracted Text from {image_file.name}:**")
+        st.text_area("OCR Extracted Text:", reconstructed_text, height=200)
 
         # Comparison with original text
         if original_text:
-            # Use the reconstructed lines for comparison
-            diff_html = compare_texts(reconstructed_lines, original_text)
+            diff_html = compare_texts(reconstructed_text, original_text)
             st.markdown("**Comparison Result:**")
             # Render the HTML diff using Streamlit components
             st.components.v1.html(diff_html, height=600, scrolling=True)
 
-def map_language_to_code(language: str) -> str:
-    """Maps language selection to easyocr language codes."""
-    language_map = {
-        "English (UK)": "en",
-        "French": "fr",
-        "Italian": "it",
-        "Polish": "pl",
-        "German": "de"
-    }
-    return language_map.get(language, "en")  # Default to English
-
-def process_image(image, language_code: str, apply_preprocessing: bool,
+def process_image(image_file, apply_preprocessing: bool,
                   grayscale: bool = False, contrast: bool = False,
                   contrast_factor: float = 1.0, sharpen: bool = False,
                   sharpen_factor: float = 1.0, denoise: bool = False,
-                  denoise_radius: int = 1) -> list:
+                  denoise_radius: int = 1):
     """Handles image processing and OCR."""
     try:
         # Open the original image
-        input_image = Image.open(image)
+        input_image = Image.open(image_file)
 
         if apply_preprocessing:
             # Preprocess the image based on user options
@@ -121,14 +98,14 @@ def process_image(image, language_code: str, apply_preprocessing: bool,
             st.image(processed_image, caption="Processed Image", use_column_width=True)
 
         # Perform OCR on the processed image
-        ocr_results = perform_ocr(processed_image, language_code)
+        ocr_data = perform_ocr(processed_image)
 
-        # Return OCR results
-        return ocr_results
+        # Return OCR data
+        return ocr_data
 
     except Exception as e:
         st.error(f"An error occurred: {e}")
-        return []
+        return {}
 
 def preprocess_image(image: Image.Image, grayscale: bool, contrast: bool,
                      contrast_factor: float, sharpen: bool, sharpen_factor: float,
@@ -151,84 +128,92 @@ def preprocess_image(image: Image.Image, grayscale: bool, contrast: bool,
 
     return image
 
-@st.cache_resource
-def load_model(language_code: str) -> Reader:
-    """Loads the OCR model with the specified language."""
-    try:
-        return ocr.Reader([language_code], model_storage_directory=".")
-    except Exception as e:
-        st.error(f"Failed to load the OCR model: {e}")
-        raise
+def perform_ocr(image: Image.Image) -> dict:
+    """Performs OCR using Tesseract and returns character-level data."""
+    custom_config = r'--oem 3 --psm 6 -c preserve_interword_spaces=1'
+    data = pytesseract.image_to_data(
+        image,
+        output_type=Output.DICT,
+        config=custom_config,
+        lang='eng'
+    )
+    return data
 
-def perform_ocr(image: Image.Image, language_code: str) -> list:
-    """Performs OCR on the given image using the specified language and returns bounding boxes, text, and confidence scores."""
-    reader = load_model(language_code)
-    results = reader.readtext(np.array(image), detail=1, paragraph=False)
-    # Each item in results: (bbox, text, confidence)
-    return results
+def reconstruct_text_with_spaces(ocr_data: dict) -> str:
+    """Reconstructs text from OCR data, preserving spaces."""
+    n_boxes = len(ocr_data['level'])
+    lines = {}
+    for i in range(n_boxes):
+        if ocr_data['text'][i].strip() == '':
+            continue
+        line_num = ocr_data['line_num'][i]
+        word_num = ocr_data['word_num'][i]
+        left = ocr_data['left'][i]
+        width = ocr_data['width'][i]
+        text = ocr_data['text'][i]
 
-def reconstruct_text_with_spaces(ocr_results):
-    """Reconstructs text from OCR results, preserving spaces based on bounding box positions."""
-    reconstructed_lines = []
-    line = ''
-    previous_bbox = None
-    previous_y_min = None
+        if line_num not in lines:
+            lines[line_num] = []
+        lines[line_num].append({
+            'word_num': word_num,
+            'left': left,
+            'width': width,
+            'text': text
+        })
 
-    # Calculate average character width to set thresholds
-    char_widths = []
-    for result in ocr_results:
-        bbox, text, confidence = result
-        x_coords = [point[0] for point in bbox]
-        char_width = (max(x_coords) - min(x_coords)) / max(len(text), 1)
-        char_widths.append(char_width)
-    if char_widths:
-        average_char_width = np.mean(char_widths)
-    else:
-        average_char_width = 10  # default value if no text detected
-
-    # Define thresholds
-    single_space_threshold = average_char_width * 0.5
-    double_space_threshold = average_char_width * 1.5
-    new_line_threshold = average_char_width * 2
-
-    for result in ocr_results:
-        bbox, text, confidence = result
-        x_min = min(point[0] for point in bbox)
-        y_min = min(point[1] for point in bbox)
-        if previous_bbox:
-            previous_x_max = max(point[0] for point in previous_bbox)
-            previous_y_min = min(point[1] for point in previous_bbox)
-            gap_x = x_min - previous_x_max
-            gap_y = abs(y_min - previous_y_min)
-            # Check if we're still on the same line
-            if gap_y > new_line_threshold:
-                # New line
-                reconstructed_lines.append(line)
-                line = text
-            else:
-                # Same line
-                if gap_x > double_space_threshold:
+    # Reconstruct text line by line
+    reconstructed_text = ''
+    for line_num in sorted(lines.keys()):
+        words = lines[line_num]
+        # Sort words by their position
+        words.sort(key=lambda x: x['left'])
+        line = ''
+        previous_word = None
+        for word in words:
+            if previous_word:
+                # Calculate the gap between words
+                gap = word['left'] - (previous_word['left'] + previous_word['width'])
+                # Determine the number of spaces based on the gap
+                if gap > average_space_width * 1.5:
                     spaces = '  '  # Double space
-                elif gap_x > single_space_threshold:
+                elif gap > average_space_width * 0.5:
                     spaces = ' '   # Single space
                 else:
-                    spaces = ''    # No space
-                line += spaces + text
-        else:
-            line = text
-        previous_bbox = bbox
-        previous_y_min = y_min
-    if line:
-        reconstructed_lines.append(line)
-    return reconstructed_lines
+                    spaces = ''
+                line += spaces + word['text']
+            else:
+                line = word['text']
+            previous_word = word
+        reconstructed_text += line + '\n'
 
-def compare_texts(ocr_text: list, original_text: str) -> str:
+    return reconstructed_text.strip()
+
+def compute_average_space_width(ocr_data: dict) -> float:
+    """Computes the average width of spaces between words."""
+    n_boxes = len(ocr_data['level'])
+    gaps = []
+    previous_word = None
+    for i in range(n_boxes):
+        if ocr_data['text'][i].strip() == '':
+            continue
+        left = ocr_data['left'][i]
+        width = ocr_data['width'][i]
+        if previous_word:
+            gap = left - (previous_word['left'] + previous_word['width'])
+            gaps.append(gap)
+        previous_word = {'left': left, 'width': width}
+    if gaps:
+        return np.mean(gaps)
+    else:
+        return 10  # Default value if no gaps found
+
+def compare_texts(ocr_text: str, original_text: str) -> str:
     """Compares OCR text with the original text and returns an HTML diff without links in the legend."""
     from difflib import HtmlDiff
     from bs4 import BeautifulSoup
 
     original_lines = original_text.splitlines()
-    ocr_lines = ocr_text  # ocr_text is already a list of lines
+    ocr_lines = ocr_text.splitlines()
 
     # Generate the diff HTML
     html_diff = HtmlDiff().make_file(
@@ -255,4 +240,6 @@ def compare_texts(ocr_text: list, original_text: str) -> str:
     return str(soup)
 
 if __name__ == "__main__":
+    # Compute average space width once, globally
+    average_space_width = 10  # Default value
     main()
