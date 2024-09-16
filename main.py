@@ -45,7 +45,18 @@ def main():
 
     if image:
         with st.spinner(f'Processing {image.name}...'):
-            ocr_results = process_image(image, language_code, apply_preprocessing, grayscale, contrast, contrast_factor, sharpen, sharpen_factor, denoise, denoise_radius)
+            ocr_results = process_image(
+                image,
+                language_code,
+                apply_preprocessing,
+                grayscale,
+                contrast,
+                contrast_factor,
+                sharpen,
+                sharpen_factor,
+                denoise,
+                denoise_radius
+            )
 
         # Display OCR results
         extracted_text = "\n".join([line for line, _ in ocr_results])
@@ -61,7 +72,6 @@ def main():
             # Render the HTML diff using Streamlit components
             st.components.v1.html(diff_html, height=600, scrolling=True)
 
-
 def map_language_to_code(language: str) -> str:
     """Maps language selection to easyocr language codes."""
     language_map = {
@@ -73,10 +83,11 @@ def map_language_to_code(language: str) -> str:
     }
     return language_map.get(language, "en")  # Default to English
 
-
-def process_image(image, language_code: str, apply_preprocessing: bool, grayscale: bool = False, contrast: bool = False,
-                  contrast_factor: float = 1.0, sharpen: bool = False, sharpen_factor: float = 1.0,
-                  denoise: bool = False, denoise_radius: int = 1) -> list:
+def process_image(image, language_code: str, apply_preprocessing: bool,
+                  grayscale: bool = False, contrast: bool = False,
+                  contrast_factor: float = 1.0, sharpen: bool = False,
+                  sharpen_factor: float = 1.0, denoise: bool = False,
+                  denoise_radius: int = 1) -> list:
     """Handles image processing and OCR."""
     try:
         # Open the original image
@@ -84,7 +95,16 @@ def process_image(image, language_code: str, apply_preprocessing: bool, grayscal
 
         if apply_preprocessing:
             # Preprocess the image based on user options
-            processed_image = preprocess_image(input_image, grayscale, contrast, contrast_factor, sharpen, sharpen_factor, denoise, denoise_radius)
+            processed_image = preprocess_image(
+                input_image,
+                grayscale,
+                contrast,
+                contrast_factor,
+                sharpen,
+                sharpen_factor,
+                denoise,
+                denoise_radius
+            )
         else:
             processed_image = input_image
 
@@ -107,9 +127,9 @@ def process_image(image, language_code: str, apply_preprocessing: bool, grayscal
         st.error(f"An error occurred: {e}")
         return []
 
-
-def preprocess_image(image: Image.Image, grayscale: bool, contrast: bool, contrast_factor: float, sharpen: bool,
-                     sharpen_factor: float, denoise: bool, denoise_radius: int) -> Image.Image:
+def preprocess_image(image: Image.Image, grayscale: bool, contrast: bool,
+                     contrast_factor: float, sharpen: bool, sharpen_factor: float,
+                     denoise: bool, denoise_radius: int) -> Image.Image:
     """Applies preprocessing steps to the image to optimize OCR results."""
 
     if grayscale:
@@ -128,7 +148,6 @@ def preprocess_image(image: Image.Image, grayscale: bool, contrast: bool, contra
 
     return image
 
-
 @st.cache_resource
 def load_model(language_code: str) -> Reader:
     """Loads the OCR model with the specified language."""
@@ -138,7 +157,6 @@ def load_model(language_code: str) -> Reader:
         st.error(f"Failed to load the OCR model: {e}")
         raise
 
-
 def perform_ocr(image: Image.Image, language_code: str) -> list:
     """Performs OCR on the given image using the specified language and returns text with confidence scores."""
     reader = load_model(language_code)
@@ -147,19 +165,37 @@ def perform_ocr(image: Image.Image, language_code: str) -> list:
     # Extract and return text with confidence scores as a list of tuples (text, confidence)
     return [(text[1], text[2]) for text in results]
 
-
 def compare_texts(ocr_text: list, original_text: str) -> str:
-    """Compares OCR text with the original text and returns an HTML diff."""
+    """Compares OCR text with the original text and returns an HTML diff without links in the legend."""
     from difflib import HtmlDiff
+
+    class CustomHtmlDiff(HtmlDiff):
+        def _legend(self):
+            """Override the legend to remove links but keep the legend."""
+            legend = [
+                '<table class="diff" summary="Legends">',
+                '<tr> <th colspan="2"> Legends </th> </tr>',
+                '<tr> <td class="diff_add">&nbsp;</td> <td>Added</td> </tr>',
+                '<tr> <td class="diff_chg">&nbsp;</td> <td>Changed</td> </tr>',
+                '<tr> <td class="diff_sub">&nbsp;</td> <td>Deleted</td> </tr>',
+                '</table>',
+            ]
+            return '\n'.join(legend)
 
     original_lines = original_text.splitlines()
     ocr_lines = ocr_text  # ocr_text is already a list of lines
 
-    # Create an instance of HtmlDiff
-    html_diff = HtmlDiff().make_file(original_lines, ocr_lines, fromdesc='Original Text', todesc='OCR Text', context=True, numlines=2)
+    # Create an instance of CustomHtmlDiff
+    html_diff = CustomHtmlDiff().make_file(
+        original_lines,
+        ocr_lines,
+        fromdesc='Original Text',
+        todesc='OCR Text',
+        context=True,
+        numlines=2
+    )
 
     return html_diff
-
 
 if __name__ == "__main__":
     main()
