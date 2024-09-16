@@ -5,17 +5,15 @@ import numpy as np  # Image Processing
 from easyocr import Reader
 from difflib import HtmlDiff
 from bs4 import BeautifulSoup  # For HTML parsing and manipulation
-import zipfile
-import io
 
 def main():
     # Set up the Streamlit app
-    st.title("Enhanced OCR Tool")
-    st.markdown("## Optical Character Recognition with Enhanced Features")
+    st.title("OCR Text Comparison Tool")
+    st.markdown("## Extract and Compare Text from Images")
 
     # Language selection in the sidebar
     available_languages = {
-        "English (UK)": "en",
+        "English": "en",
         "French": "fr",
         "Italian": "it",
         "Polish": "pl",
@@ -31,11 +29,12 @@ def main():
     language_options = st.sidebar.multiselect(
         "Choose OCR Language(s)",
         list(available_languages.keys()),
-        default=["English (UK)"]
+        default=["English"]
     )
     language_codes = [available_languages[lang] for lang in language_options]
 
     # Preprocessing options in the sidebar
+    st.sidebar.markdown("### Image Preprocessing")
     apply_preprocessing = st.sidebar.checkbox("Apply Image Preprocessing", value=True)
 
     # Initialize preprocessing variables
@@ -59,89 +58,70 @@ def main():
     double_space_threshold = st.sidebar.slider("Double Space Threshold", 15, 40, 20)
     single_space_threshold = st.sidebar.slider("Single Space Threshold", 5, 14, 10)
 
-    # Image upload section for batch processing
-    uploaded_files = st.file_uploader(
-        "Upload your image(s) here", type=["png", "jpg", "jpeg"], accept_multiple_files=True
+    # Image upload section for single image processing
+    uploaded_file = st.file_uploader(
+        "Upload your image here", type=["png", "jpg", "jpeg"]
     )
 
-    # Input field for the original text (moved outside the loop)
+    # Input field for the original text
     original_text = st.text_area("Enter the original text here:", height=200)
 
-    if uploaded_files:
-        results = []
-        for image_file in uploaded_files:
-            with st.spinner(f'Processing {image_file.name}...'):
-                ocr_results = process_image(
-                    image_file,
-                    language_codes,
-                    apply_preprocessing,
-                    grayscale,
-                    contrast,
-                    contrast_factor,
-                    sharpen,
-                    sharpen_factor,
-                    denoise,
-                    denoise_radius
-                )
-            if ocr_results:
-                # Reconstruct text preserving spaces
-                reconstructed_lines = reconstruct_text_with_spaces(
-                    ocr_results,
-                    line_threshold,
-                    double_space_threshold,
-                    single_space_threshold
-                )
+    if uploaded_file:
+        with st.spinner(f'Processing {uploaded_file.name}...'):
+            ocr_results = process_image(
+                uploaded_file,
+                language_codes,
+                apply_preprocessing,
+                grayscale,
+                contrast,
+                contrast_factor,
+                sharpen,
+                sharpen_factor,
+                denoise,
+                denoise_radius
+            )
+        if ocr_results:
+            # Reconstruct text preserving spaces
+            reconstructed_lines = reconstruct_text_with_spaces(
+                ocr_results,
+                line_threshold,
+                double_space_threshold,
+                single_space_threshold
+            )
 
-                # Display OCR results
-                st.write(f"### Extracted Text from {image_file.name}:")
-                extracted_text = '\n'.join(reconstructed_lines)
+            # Display OCR results
+            st.markdown("### OCR Extracted Text")
+            extracted_text = '\n'.join(reconstructed_lines)
+            st.text_area("OCR Extracted Text", extracted_text, height=200)
 
-                # Enhanced UI: Display images and texts
-                with st.expander(f"Details for {image_file.name}"):
-                    # Display original image
-                    st.image(Image.open(image_file), caption=image_file.name, use_column_width=True)
+            # Display original and processed images
+            with st.expander("View Images"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.image(Image.open(uploaded_file), caption="Original Image", use_column_width=True)
+                with col2:
+                    processed_image = get_processed_image(
+                        uploaded_file,
+                        apply_preprocessing,
+                        grayscale,
+                        contrast,
+                        contrast_factor,
+                        sharpen,
+                        sharpen_factor,
+                        denoise,
+                        denoise_radius
+                    )
+                    st.image(processed_image, caption="Processed Image", use_column_width=True)
 
-                    # Display extracted text
-                    st.text_area("OCR Extracted Text", extracted_text, height=200, key=f"ocr_{image_file.name}")
-
-                    # Comparison with original text
-                    if original_text:
-                        # Generate diff HTML with color highlights
-                        diff_html = compare_texts(reconstructed_lines, original_text)
-                        st.markdown("**Comparison Result:**")
-                        # Render the HTML diff using Streamlit components
-                        st.components.v1.html(diff_html, height=400, scrolling=True)
-
-                # Save results for batch download
-                results.append({
-                    'image_name': image_file.name,
-                    'extracted_text': extracted_text,
-                    'comparison_html': diff_html if original_text else ''
-                })
-            else:
-                st.error(f"No text found in {image_file.name}. Please try with a different image.")
-
-        # Batch download option
-        if results:
-            if st.button("Download Results as ZIP"):
-                zip_buffer = io.BytesIO()
-                with zipfile.ZipFile(zip_buffer, "w") as zf:
-                    for result in results:
-                        # Save extracted text
-                        text_filename = f"{result['image_name']}_extracted.txt"
-                        zf.writestr(text_filename, result['extracted_text'])
-
-                        # Save comparison HTML
-                        if result['comparison_html']:
-                            html_filename = f"{result['image_name']}_comparison.html"
-                            zf.writestr(html_filename, result['comparison_html'])
-
-                st.download_button(
-                    label="Download ZIP",
-                    data=zip_buffer.getvalue(),
-                    file_name="ocr_results.zip",
-                    mime="application/zip"
-                )
+            # Comparison with original text
+            if original_text:
+                # Generate diff HTML with color highlights
+                diff_html = compare_texts(reconstructed_lines, original_text)
+                st.markdown("### Comparison Result")
+                # Render the HTML diff using Streamlit components
+                st.components.v1.html(diff_html, height=400, scrolling=True)
+        else:
+            st.error(f"No text found in {uploaded_file.name}. Please try with a different image.")
 
 def process_image(image, language_codes: list, apply_preprocessing: bool,
                   grayscale: bool = False, contrast: bool = False,
@@ -177,6 +157,26 @@ def process_image(image, language_codes: list, apply_preprocessing: bool,
     except Exception as e:
         st.error(f"An error occurred: {e}")
         return []
+
+def get_processed_image(image, apply_preprocessing: bool,
+                        grayscale: bool, contrast: bool, contrast_factor: float,
+                        sharpen: bool, sharpen_factor: float,
+                        denoise: bool, denoise_radius: int) -> Image.Image:
+    """Returns the processed image for display."""
+    input_image = Image.open(image)
+    if apply_preprocessing:
+        return preprocess_image(
+            input_image,
+            grayscale,
+            contrast,
+            contrast_factor,
+            sharpen,
+            sharpen_factor,
+            denoise,
+            denoise_radius
+        )
+    else:
+        return input_image
 
 def preprocess_image(image: Image.Image, grayscale: bool, contrast: bool,
                      contrast_factor: float, sharpen: bool, sharpen_factor: float,
