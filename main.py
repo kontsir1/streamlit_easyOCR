@@ -1,4 +1,4 @@
-# app.py
+# main.py
 import streamlit as st
 from ocr_utils import process_image, perform_ocr
 from constants import AVAILABLE_LANGUAGES
@@ -58,7 +58,11 @@ def main():
                 denoise,
                 denoise_radius
             )
-            ocr_text = perform_ocr(processed_image, language_code)
+            if processed_image is not None:
+                ocr_text = perform_ocr(processed_image, language_code)
+            else:
+                st.error("Failed to process the image.")
+                return
 
         if ocr_text.strip():
             # Display OCR results
