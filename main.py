@@ -3,7 +3,7 @@ import streamlit as st  # Web App
 from PIL import Image, ImageOps, ImageEnhance, ImageFilter  # Image Processing
 import numpy as np  # Image Processing
 from easyocr import Reader
-from difflib import SequenceMatcher
+from difflib import unified_diff
 
 def main():
     # Set up the Streamlit app
@@ -57,7 +57,7 @@ def main():
         if original_text:
             ocr_text = [line for line, _ in ocr_results]
             highlighted_text = compare_texts(ocr_text, original_text)
-            st.markdown("**Comparison Result:**")
+            st.markdown("**Comparison Result:**", unsafe_allow_html=True)
             st.markdown(highlighted_text, unsafe_allow_html=True)
 
 
@@ -99,7 +99,7 @@ def process_image(image, language_code: str, apply_preprocessing: bool, grayscal
         # Perform OCR on the processed image
         result_text = perform_ocr(processed_image, language_code)
 
-        # Return text as a list of lines
+        # Return text as a list of lines with confidence scores
         return result_text
 
     except Exception as e:
@@ -148,41 +148,55 @@ def perform_ocr(image: Image.Image, language_code: str) -> list:
 
 
 def compare_texts(ocr_text: list, original_text: str) -> str:
-    """Compares OCR text with the original text and highlights differences."""
-    
-    # Combine OCR text into a single string
-    ocr_string = "\n".join(ocr_text)
-    
-    # Create SequenceMatcher to compare OCR text and original text
-    seq_matcher = SequenceMatcher(None, original_text, ocr_string)
-    
-    # Generate the differences
-    diff = seq_matcher.get_opcodes()
-    
-    highlighted_text = []
-    prev_end_a = 0
-    prev_end_b = 0
-    
-    for tag, i1, i2, j1, j2 in diff:
-        # Append unchanged parts
-        highlighted_text.append(f'<span style="color:black">{ocr_string[prev_end_b:j1]}</span>')
-        
-        if tag == 'replace' or tag == 'delete':
-            # Highlight deleted parts from original text
-            highlighted_text.append(f'<span style="color:red"><s>{original_text[i1:i2]}</s></span>')
-        
-        if tag == 'replace' or tag == 'insert':
-            # Highlight inserted parts from OCR text
-            highlighted_text.append(f'<span style="color:green">{ocr_string[j1:j2]}</span>')
-        
-        # Update previous end points
-        prev_end_a = i2
-        prev_end_b = j2
+    """Compares OCR text with the original text and returns an HTML diff styled like GitHub."""
+    from difflib import unified_diff
 
-    # Append remaining unchanged parts
-    highlighted_text.append(f'<span style="color:black">{ocr_string[prev_end_b:]}</span>')
-    
-    return "".join(highlighted_text)
+    original_lines = original_text.splitlines()
+    ocr_lines = ocr_text  # ocr_text is already a list of lines
+
+    # Generate unified diff
+    diff = unified_diff(
+        original_lines,
+        ocr_lines,
+        fromfile='Original Text',
+        tofile='OCR Text',
+        lineterm=''
+    )
+
+    # CSS styles similar to GitHub's diff view
+    styles = '''
+    <style>
+    .diff-header { color: #6a737d; font-weight: bold; }
+    .diff-hunk { color: #6a737d; font-weight: bold; }
+    .diff-line { white-space: pre-wrap; font-family: monospace; }
+    .diff-add { background-color: #e6ffed; }
+    .diff-del { background-color: #ffeef0; }
+    .diff-context { background-color: #f6f8fa; }
+    </style>
+    '''
+
+    # Process the diff and wrap lines in spans with CSS classes
+    html_diff = [styles, '<pre>']
+    for line in diff:
+        if line.startswith('---') or line.startswith('+++'):
+            # File header
+            html_diff.append(f'<span class="diff-header diff-line">{line}</span>')
+        elif line.startswith('@@'):
+            # Hunk header
+            html_diff.append(f'<span class="diff-hunk diff-line">{line}</span>')
+        elif line.startswith('-'):
+            # Deletion
+            html_diff.append(f'<span class="diff-del diff-line">{line}</span>')
+        elif line.startswith('+'):
+            # Addition
+            html_diff.append(f'<span class="diff-add diff-line">{line}</span>')
+        else:
+            # Context
+            html_diff.append(f'<span class="diff-context diff-line">{line}</span>')
+        html_diff.append('\n')
+    html_diff.append('</pre>')
+
+    return ''.join(html_diff)
 
 
 if __name__ == "__main__":
