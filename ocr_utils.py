@@ -8,7 +8,6 @@ import streamlit as st
 def load_model(language_code: str) -> easyocr.Reader:
     """Loads the OCR model with the specified language."""
     try:
-        # Remove the model_storage_directory parameter
         return easyocr.Reader([language_code])
     except Exception as e:
         st.error(f"Failed to load the OCR model: {e}")
@@ -65,9 +64,10 @@ def preprocess_image(image: Image.Image, grayscale: bool, contrast: bool,
     return image
 
 def perform_ocr(image: Image.Image, language_code: str) -> str:
-    """Performs OCR and returns the extracted text."""
+    """Performs OCR and returns the extracted text with the same structure as the image."""
     reader = load_model(language_code)
-    results = reader.readtext(np.array(image), detail=0, paragraph=True)
-    # Combine the results into a single string
+    # Set paragraph=False to get line-by-line text
+    results = reader.readtext(np.array(image), detail=0, paragraph=False)
+    # Combine the results into a single string with line breaks
     ocr_text = '\n'.join(results)
     return ocr_text
