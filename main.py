@@ -13,7 +13,7 @@ def main():
     st.title("Enhanced OCR Tool")
     st.markdown("## Optical Character Recognition with Enhanced Features")
 
-    # Language selection in the sidebar (Enhancement 2)
+    # Language selection in the sidebar
     available_languages = {
         "English (UK)": "en",
         "French": "fr",
@@ -53,18 +53,18 @@ def main():
         denoise = st.sidebar.checkbox("Reduce Noise", value=True)
         denoise_radius = st.sidebar.slider("Denoise Radius", 1, 7, 3, step=2)
 
-    # Adjustable space detection thresholds (Enhancement 5)
+    # Adjustable space detection thresholds
     st.sidebar.markdown("### Space Detection Thresholds")
     line_threshold = st.sidebar.slider("Line Grouping Threshold", 5, 20, 10)
     double_space_threshold = st.sidebar.slider("Double Space Threshold", 15, 40, 20)
     single_space_threshold = st.sidebar.slider("Single Space Threshold", 5, 14, 10)
 
-    # Image upload section for batch processing (Enhancement 3)
+    # Image upload section for batch processing
     uploaded_files = st.file_uploader(
         "Upload your image(s) here", type=["png", "jpg", "jpeg"], accept_multiple_files=True
     )
 
-    # Input field for the original text
+    # Input field for the original text (moved outside the loop)
     original_text = st.text_area("Enter the original text here:", height=200)
 
     if uploaded_files:
@@ -93,29 +93,24 @@ def main():
                 )
 
                 # Display OCR results
-                st.write(f"**Extracted Text from {image_file.name}:**")
+                st.write(f"### Extracted Text from {image_file.name}:")
                 extracted_text = '\n'.join(reconstructed_lines)
 
-                # Enhanced UI: Side-by-side comparison (Enhancement 4)
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.text_area("Original Text", original_text, height=200, key=f"original_{image_file.name}")
-                with col2:
+                # Enhanced UI: Display images and texts
+                with st.expander(f"Details for {image_file.name}"):
+                    # Display original image
+                    st.image(Image.open(image_file), caption=image_file.name, use_column_width=True)
+
+                    # Display extracted text
                     st.text_area("OCR Extracted Text", extracted_text, height=200, key=f"ocr_{image_file.name}")
 
-                # Comparison with original text
-                if original_text:
-                    # Option to choose diff format (inline or context)
-                    diff_format = st.selectbox("Select Diff Format", ["Context", "Inline"])
-                    if diff_format == "Context":
-                        context = True
-                    else:
-                        context = False
-
-                    diff_html = compare_texts(reconstructed_lines, original_text, context=context)
-                    st.markdown("**Comparison Result:**")
-                    # Render the HTML diff using Streamlit components
-                    st.components.v1.html(diff_html, height=600, scrolling=True)
+                    # Comparison with original text
+                    if original_text:
+                        # Generate diff HTML with color highlights
+                        diff_html = compare_texts(reconstructed_lines, original_text)
+                        st.markdown("**Comparison Result:**")
+                        # Render the HTML diff using Streamlit components
+                        st.components.v1.html(diff_html, height=400, scrolling=True)
 
                 # Save results for batch download
                 results.append({
@@ -126,7 +121,7 @@ def main():
             else:
                 st.error(f"No text found in {image_file.name}. Please try with a different image.")
 
-        # Batch download option (Enhancement 3)
+        # Batch download option
         if results:
             if st.button("Download Results as ZIP"):
                 zip_buffer = io.BytesIO()
@@ -147,24 +142,6 @@ def main():
                     file_name="ocr_results.zip",
                     mime="application/zip"
                 )
-
-def map_language_to_code(language: str) -> str:
-    """Maps language selection to EasyOCR language codes."""
-    language_map = {
-        "English (UK)": "en",
-        "French": "fr",
-        "Italian": "it",
-        "Polish": "pl",
-        "German": "de",
-        "Spanish": "es",
-        "Chinese (Simplified)": "ch_sim",
-        "Chinese (Traditional)": "ch_tra",
-        "Japanese": "ja",
-        "Korean": "ko",
-        "Russian": "ru",
-        "Arabic": "ar",
-    }
-    return language_map.get(language, "en")  # Default to English
 
 def process_image(image, language_codes: list, apply_preprocessing: bool,
                   grayscale: bool = False, contrast: bool = False,
@@ -284,7 +261,7 @@ def reconstruct_text_with_spaces(ocr_results, line_threshold, double_space_thres
         reconstructed_lines.append(line_text)
     return reconstructed_lines
 
-def compare_texts(ocr_text: list, original_text: str, context=True) -> str:
+def compare_texts(ocr_text: list, original_text: str) -> str:
     """Compares OCR text with the original text and returns an HTML diff without any links."""
     from difflib import HtmlDiff
     from bs4 import BeautifulSoup
@@ -293,13 +270,13 @@ def compare_texts(ocr_text: list, original_text: str, context=True) -> str:
     ocr_lines = ocr_text  # ocr_text is already a list of lines
 
     # Generate the diff HTML
-    html_diff = HtmlDiff().make_file(
+    html_diff = HtmlDiff(wrapcolumn=80).make_file(
         original_lines,
         ocr_lines,
         fromdesc='Original Text',
         todesc='OCR Text',
-        context=context,
-        numlines=2
+        context=False,
+        numlines=0
     )
 
     # Parse the HTML with BeautifulSoup
