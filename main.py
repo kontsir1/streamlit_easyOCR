@@ -59,16 +59,18 @@ def main():
                 denoise_radius
             )
 
+        # Reconstruct text preserving spaces
+        reconstructed_lines = reconstruct_text_with_spaces(ocr_results)
+
         # Display OCR results
-        extracted_text = "\n".join([line for line, _ in ocr_results])
-        st.write(f"**Extracted Text with Confidence Scores from {image.name}:**")
-        for line, confidence in ocr_results:
-            st.write(f"Text: {line} (Confidence: {confidence * 100:.2f}%)")
+        st.write(f"**Extracted Text from {image.name}:**")
+        extracted_text = '\n'.join(reconstructed_lines)
+        st.text_area("OCR Extracted Text:", extracted_text, height=200)
 
         # Comparison with original text
         if original_text:
-            ocr_text = [line for line, _ in ocr_results]
-            diff_html = compare_texts(ocr_text, original_text)
+            # Use the reconstructed lines for comparison
+            diff_html = compare_texts(reconstructed_lines, original_text)
             st.markdown("**Comparison Result:**")
             # Render the HTML diff using Streamlit components
             st.components.v1.html(diff_html, height=600, scrolling=True)
@@ -119,10 +121,10 @@ def process_image(image, language_code: str, apply_preprocessing: bool,
             st.image(processed_image, caption="Processed Image", use_column_width=True)
 
         # Perform OCR on the processed image
-        result_text = perform_ocr(processed_image, language_code)
+        ocr_results = perform_ocr(processed_image, language_code)
 
-        # Return text as a list of lines with confidence scores
-        return result_text
+        # Return OCR results
+        return ocr_results
 
     except Exception as e:
         st.error(f"An error occurred: {e}")
@@ -159,12 +161,66 @@ def load_model(language_code: str) -> Reader:
         raise
 
 def perform_ocr(image: Image.Image, language_code: str) -> list:
-    """Performs OCR on the given image using the specified language and returns text with confidence scores."""
+    """Performs OCR on the given image using the specified language and returns bounding boxes, text, and confidence scores."""
     reader = load_model(language_code)
-    results = reader.readtext(np.array(image))
+    results = reader.readtext(np.array(image), detail=1, paragraph=False)
+    # Each item in results: (bbox, text, confidence)
+    return results
 
-    # Extract and return text with confidence scores as a list of tuples (text, confidence)
-    return [(text[1], text[2]) for text in results]
+def reconstruct_text_with_spaces(ocr_results):
+    """Reconstructs text from OCR results, preserving spaces based on bounding box positions."""
+    reconstructed_lines = []
+    line = ''
+    previous_bbox = None
+    previous_y_min = None
+
+    # Calculate average character width to set thresholds
+    char_widths = []
+    for result in ocr_results:
+        bbox, text, confidence = result
+        x_coords = [point[0] for point in bbox]
+        char_width = (max(x_coords) - min(x_coords)) / max(len(text), 1)
+        char_widths.append(char_width)
+    if char_widths:
+        average_char_width = np.mean(char_widths)
+    else:
+        average_char_width = 10  # default value if no text detected
+
+    # Define thresholds
+    single_space_threshold = average_char_width * 0.5
+    double_space_threshold = average_char_width * 1.5
+    new_line_threshold = average_char_width * 2
+
+    for result in ocr_results:
+        bbox, text, confidence = result
+        x_min = min(point[0] for point in bbox)
+        y_min = min(point[1] for point in bbox)
+        if previous_bbox:
+            previous_x_max = max(point[0] for point in previous_bbox)
+            previous_y_min = min(point[1] for point in previous_bbox)
+            gap_x = x_min - previous_x_max
+            gap_y = abs(y_min - previous_y_min)
+            # Check if we're still on the same line
+            if gap_y > new_line_threshold:
+                # New line
+                reconstructed_lines.append(line)
+                line = text
+            else:
+                # Same line
+                if gap_x > double_space_threshold:
+                    spaces = '  '  # Double space
+                elif gap_x > single_space_threshold:
+                    spaces = ' '   # Single space
+                else:
+                    spaces = ''    # No space
+                line += spaces + text
+        else:
+            line = text
+        previous_bbox = bbox
+        previous_y_min = y_min
+    if line:
+        reconstructed_lines.append(line)
+    return reconstructed_lines
 
 def compare_texts(ocr_text: list, original_text: str) -> str:
     """Compares OCR text with the original text and returns an HTML diff without links in the legend."""
