@@ -6,6 +6,9 @@ from bs4 import BeautifulSoup  # For HTML parsing and manipulation
 import pytesseract
 from pytesseract import Output
 
+# Set the Tesseract executable path if necessary
+# pytesseract.pytesseract.tesseract_cmd = r'/usr/bin/tesseract'  # Update with your path
+
 def main():
     # Set up the Streamlit app
     st.title("Tesseract OCR - Extract Text from Images")
@@ -49,19 +52,27 @@ def main():
                 denoise_radius
             )
 
-        # Reconstruct text preserving spaces
-        reconstructed_text = reconstruct_text_with_spaces(ocr_data)
+        # Check if ocr_data contains 'level' key
+        if ocr_data and 'level' in ocr_data:
+            # Compute average space width
+            average_space_width = compute_average_space_width(ocr_data)
 
-        # Display OCR results
-        st.write(f"**Extracted Text from {image_file.name}:**")
-        st.text_area("OCR Extracted Text:", reconstructed_text, height=200)
+            # Reconstruct text preserving spaces
+            reconstructed_text = reconstruct_text_with_spaces(ocr_data, average_space_width)
 
-        # Comparison with original text
-        if original_text:
-            diff_html = compare_texts(reconstructed_text, original_text)
-            st.markdown("**Comparison Result:**")
-            # Render the HTML diff using Streamlit components
-            st.components.v1.html(diff_html, height=600, scrolling=True)
+            # Display OCR results
+            st.write(f"**Extracted Text from {image_file.name}:**")
+            st.text_area("OCR Extracted Text:", reconstructed_text, height=200)
+
+            # Comparison with original text
+            if original_text:
+                diff_html = compare_texts(reconstructed_text, original_text)
+                st.markdown("**Comparison Result:**")
+                # Render the HTML diff using Streamlit components
+                st.components.v1.html(diff_html, height=600, scrolling=True)
+        else:
+            st.error("OCR data is empty or missing expected keys. Please check Tesseract installation and configurations.")
+            st.write("OCR Data Keys:", ocr_data.keys() if ocr_data else "No data returned.")
 
 def process_image(image_file, apply_preprocessing: bool,
                   grayscale: bool = False, contrast: bool = False,
@@ -100,7 +111,6 @@ def process_image(image_file, apply_preprocessing: bool,
         # Perform OCR on the processed image
         ocr_data = perform_ocr(processed_image)
 
-        # Return OCR data
         return ocr_data
 
     except Exception as e:
@@ -139,8 +149,30 @@ def perform_ocr(image: Image.Image) -> dict:
     )
     return data
 
-def reconstruct_text_with_spaces(ocr_data: dict) -> str:
+def compute_average_space_width(ocr_data: dict) -> float:
+    """Computes the average width of spaces between words."""
+    n_boxes = len(ocr_data['level'])
+    gaps = []
+    previous_word = None
+    for i in range(n_boxes):
+        if ocr_data['text'][i].strip() == '':
+            continue
+        left = ocr_data['left'][i]
+        width = ocr_data['width'][i]
+        if previous_word:
+            gap = left - (previous_word['left'] + previous_word['width'])
+            gaps.append(gap)
+        previous_word = {'left': left, 'width': width}
+    if gaps:
+        return np.mean(gaps)
+    else:
+        return 10  # Default value if no gaps found
+
+def reconstruct_text_with_spaces(ocr_data: dict, average_space_width: float) -> str:
     """Reconstructs text from OCR data, preserving spaces."""
+    if 'level' not in ocr_data:
+        st.error("OCR data does not contain 'level' key. Please check Tesseract installation and configurations.")
+        return ''
     n_boxes = len(ocr_data['level'])
     lines = {}
     for i in range(n_boxes):
@@ -188,25 +220,6 @@ def reconstruct_text_with_spaces(ocr_data: dict) -> str:
 
     return reconstructed_text.strip()
 
-def compute_average_space_width(ocr_data: dict) -> float:
-    """Computes the average width of spaces between words."""
-    n_boxes = len(ocr_data['level'])
-    gaps = []
-    previous_word = None
-    for i in range(n_boxes):
-        if ocr_data['text'][i].strip() == '':
-            continue
-        left = ocr_data['left'][i]
-        width = ocr_data['width'][i]
-        if previous_word:
-            gap = left - (previous_word['left'] + previous_word['width'])
-            gaps.append(gap)
-        previous_word = {'left': left, 'width': width}
-    if gaps:
-        return np.mean(gaps)
-    else:
-        return 10  # Default value if no gaps found
-
 def compare_texts(ocr_text: str, original_text: str) -> str:
     """Compares OCR text with the original text and returns an HTML diff without links in the legend."""
     from difflib import HtmlDiff
@@ -240,6 +253,4 @@ def compare_texts(ocr_text: str, original_text: str) -> str:
     return str(soup)
 
 if __name__ == "__main__":
-    # Compute average space width once, globally
-    average_space_width = 10  # Default value
     main()
