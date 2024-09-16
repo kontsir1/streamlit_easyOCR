@@ -1,6 +1,4 @@
-torch
-torchvision
-easyocr
+pytesseract
 numpy
 streamlit
 streamlit-cropper
