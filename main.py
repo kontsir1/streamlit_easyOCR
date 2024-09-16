@@ -217,7 +217,7 @@ def reconstruct_text_with_spaces(ocr_results):
     return reconstructed_lines
 
 def compare_texts(ocr_text: list, original_text: str) -> str:
-    """Compares OCR text with the original text and returns an HTML diff without links in the legend."""
+    """Compares OCR text with the original text and returns an HTML diff without any links."""
     from difflib import HtmlDiff
     from bs4 import BeautifulSoup
 
@@ -237,13 +237,9 @@ def compare_texts(ocr_text: list, original_text: str) -> str:
     # Parse the HTML with BeautifulSoup
     soup = BeautifulSoup(html_diff, 'html.parser')
 
-    # Find the legend table
-    legend_table = soup.find('table', {'summary': 'Legends'})
-
-    # Remove all <a> tags within the legend table
-    if legend_table:
-        for a_tag in legend_table.find_all('a'):
-            a_tag.replace_with_children()  # Replace <a> tag with its children (text)
+    # Remove all <a> tags within the entire HTML
+    for a_tag in soup.find_all('a'):
+        a_tag.replace_with_children()  # Replace <a> tag with its children (text)
 
     # Return the modified HTML
     return str(soup)
