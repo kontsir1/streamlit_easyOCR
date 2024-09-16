@@ -8,7 +8,8 @@ import streamlit as st
 def load_model(language_code: str) -> easyocr.Reader:
     """Loads the OCR model with the specified language."""
     try:
-        return easyocr.Reader([language_code], model_storage_directory=".")
+        # Remove the model_storage_directory parameter
+        return easyocr.Reader([language_code])
     except Exception as e:
         st.error(f"Failed to load the OCR model: {e}")
         raise
