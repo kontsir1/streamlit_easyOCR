@@ -178,15 +178,15 @@ def reconstruct_text_with_spaces(ocr_results):
         # Calculate the center of the bounding box to determine the line
         y_center = np.mean([point[1] for point in bbox])
         # Group words that are on the same line
-        line_key = y_center  # Use y_center as the key
-        added_to_line = False
+        line_key = None
         for key in lines.keys():
             if abs(key - y_center) < 10:  # Adjust the threshold as needed
-                lines[key].append((bbox, text))
-                added_to_line = True
+                line_key = key
                 break
-        if not added_to_line:
-            lines[line_key] = [(bbox, text)]
+        if line_key is None:
+            line_key = y_center
+            lines[line_key] = []
+        lines[line_key].append((bbox, text))
 
     # Sort lines by their y position
     sorted_lines = [lines[key] for key in sorted(lines.keys())]
@@ -243,7 +243,7 @@ def compare_texts(ocr_text: list, original_text: str) -> str:
     # Remove all <a> tags within the legend table
     if legend_table:
         for a_tag in legend_table.find_all('a'):
-            a_tag.replace_with_children()
+            a_tag.replace_with_children()  # Replace <a> tag with its children (text)
 
     # Return the modified HTML
     return str(soup)
