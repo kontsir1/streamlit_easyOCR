@@ -3,7 +3,7 @@ import streamlit as st  # Web App
 from PIL import Image, ImageOps, ImageEnhance, ImageFilter  # Image Processing
 import numpy as np  # Image Processing
 from easyocr import Reader
-from difflib import unified_diff
+from difflib import HtmlDiff
 
 def main():
     # Set up the Streamlit app
@@ -56,9 +56,10 @@ def main():
         # Comparison with original text
         if original_text:
             ocr_text = [line for line, _ in ocr_results]
-            highlighted_text = compare_texts(ocr_text, original_text)
-            st.markdown("**Comparison Result:**", unsafe_allow_html=True)
-            st.markdown(highlighted_text, unsafe_allow_html=True)
+            diff_html = compare_texts(ocr_text, original_text)
+            st.markdown("**Comparison Result:**")
+            # Render the HTML diff using Streamlit components
+            st.components.v1.html(diff_html, height=600, scrolling=True)
 
 
 def map_language_to_code(language: str) -> str:
@@ -148,55 +149,16 @@ def perform_ocr(image: Image.Image, language_code: str) -> list:
 
 
 def compare_texts(ocr_text: list, original_text: str) -> str:
-    """Compares OCR text with the original text and returns an HTML diff styled like GitHub."""
-    from difflib import unified_diff
+    """Compares OCR text with the original text and returns an HTML diff."""
+    from difflib import HtmlDiff
 
     original_lines = original_text.splitlines()
     ocr_lines = ocr_text  # ocr_text is already a list of lines
 
-    # Generate unified diff
-    diff = unified_diff(
-        original_lines,
-        ocr_lines,
-        fromfile='Original Text',
-        tofile='OCR Text',
-        lineterm=''
-    )
+    # Create an instance of HtmlDiff
+    html_diff = HtmlDiff().make_file(original_lines, ocr_lines, fromdesc='Original Text', todesc='OCR Text', context=True, numlines=2)
 
-    # CSS styles similar to GitHub's diff view
-    styles = '''
-    <style>
-    .diff-header { color: #6a737d; font-weight: bold; }
-    .diff-hunk { color: #6a737d; font-weight: bold; }
-    .diff-line { white-space: pre-wrap; font-family: monospace; }
-    .diff-add { background-color: #e6ffed; }
-    .diff-del { background-color: #ffeef0; }
-    .diff-context { background-color: #f6f8fa; }
-    </style>
-    '''
-
-    # Process the diff and wrap lines in spans with CSS classes
-    html_diff = [styles, '<pre>']
-    for line in diff:
-        if line.startswith('---') or line.startswith('+++'):
-            # File header
-            html_diff.append(f'<span class="diff-header diff-line">{line}</span>')
-        elif line.startswith('@@'):
-            # Hunk header
-            html_diff.append(f'<span class="diff-hunk diff-line">{line}</span>')
-        elif line.startswith('-'):
-            # Deletion
-            html_diff.append(f'<span class="diff-del diff-line">{line}</span>')
-        elif line.startswith('+'):
-            # Addition
-            html_diff.append(f'<span class="diff-add diff-line">{line}</span>')
-        else:
-            # Context
-            html_diff.append(f'<span class="diff-context diff-line">{line}</span>')
-        html_diff.append('\n')
-    html_diff.append('</pre>')
-
-    return ''.join(html_diff)
+    return html_diff
 
 
 if __name__ == "__main__":
