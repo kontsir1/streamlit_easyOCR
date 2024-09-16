@@ -4,6 +4,7 @@ from PIL import Image, ImageOps, ImageEnhance, ImageFilter  # Image Processing
 import numpy as np  # Image Processing
 from easyocr import Reader
 from difflib import HtmlDiff
+from bs4 import BeautifulSoup  # For HTML parsing and manipulation
 
 def main():
     # Set up the Streamlit app
@@ -168,25 +169,13 @@ def perform_ocr(image: Image.Image, language_code: str) -> list:
 def compare_texts(ocr_text: list, original_text: str) -> str:
     """Compares OCR text with the original text and returns an HTML diff without links in the legend."""
     from difflib import HtmlDiff
-
-    class CustomHtmlDiff(HtmlDiff):
-        def _legend(self):
-            """Override the legend to remove links but keep the legend."""
-            legend = [
-                '<table class="diff" summary="Legends">',
-                '<tr> <th colspan="2"> Legends </th> </tr>',
-                '<tr> <td class="diff_add">&nbsp;</td> <td>Added</td> </tr>',
-                '<tr> <td class="diff_chg">&nbsp;</td> <td>Changed</td> </tr>',
-                '<tr> <td class="diff_sub">&nbsp;</td> <td>Deleted</td> </tr>',
-                '</table>',
-            ]
-            return '\n'.join(legend)
+    from bs4 import BeautifulSoup
 
     original_lines = original_text.splitlines()
     ocr_lines = ocr_text  # ocr_text is already a list of lines
 
-    # Create an instance of CustomHtmlDiff
-    html_diff = CustomHtmlDiff().make_file(
+    # Generate the diff HTML
+    html_diff = HtmlDiff().make_file(
         original_lines,
         ocr_lines,
         fromdesc='Original Text',
@@ -195,7 +184,19 @@ def compare_texts(ocr_text: list, original_text: str) -> str:
         numlines=2
     )
 
-    return html_diff
+    # Parse the HTML with BeautifulSoup
+    soup = BeautifulSoup(html_diff, 'html.parser')
+
+    # Find the legend table
+    legend_table = soup.find('table', {'summary': 'Legends'})
+
+    # Remove all <a> tags within the legend table
+    if legend_table:
+        for a_tag in legend_table.find_all('a'):
+            a_tag.replace_with_children()
+
+    # Return the modified HTML
+    return str(soup)
 
 if __name__ == "__main__":
     main()
